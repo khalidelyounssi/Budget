@@ -1,0 +1,7 @@
+{
+  "name": "budget-projects",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}
