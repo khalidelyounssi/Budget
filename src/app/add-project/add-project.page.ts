@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ToastController } from '@ionic/angular';
@@ -40,18 +40,18 @@ import { ProjectService } from '../services/project.service';
   ],
 })
 export class AddProjectPage {
+  private formBuilder = inject(FormBuilder);
+  private projectService = inject(ProjectService);
+  private router = inject(Router);
+  private toastController = inject(ToastController);
+
   projectForm = this.formBuilder.nonNullable.group({
     name: ['', Validators.required],
     description: [''],
     estimatedBudget: [0, [Validators.required, Validators.min(0.01)]],
   });
 
-  constructor(
-    private formBuilder: FormBuilder,
-    private projectService: ProjectService,
-    private router: Router,
-    private toastController: ToastController,
-  ) {
+  constructor() {
     addIcons({ arrowBackOutline, saveOutline });
   }
 

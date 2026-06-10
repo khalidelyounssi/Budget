@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AlertController } from '@ionic/angular';
@@ -54,16 +54,16 @@ import { ProjectService } from '../services/project.service';
   ],
 })
 export class HomePage {
+  projectService = inject(ProjectService);
+  private router = inject(Router);
+  private alertController = inject(AlertController);
+
   projects: Project[] = [];
   searchTerm = '';
   activeFilter: 'all' | 'available' | 'over' = 'all';
   sortMode: 'newest' | 'budget-desc' | 'expenses-desc' | 'remaining-asc' | 'name' = 'newest';
 
-  constructor(
-    public projectService: ProjectService,
-    private router: Router,
-    private alertController: AlertController,
-  ) {
+  constructor() {
     addIcons({
       addOutline,
       analyticsOutline,

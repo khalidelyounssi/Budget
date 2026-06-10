@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IonCard, IonCardContent, IonContent, IonIcon } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
@@ -23,9 +23,11 @@ interface ExpenseSummary {
   imports: [CommonModule, RouterLink, IonCard, IonCardContent, IonContent, IonIcon],
 })
 export class StatsPage {
+  private projectService = inject(ProjectService);
+
   projects: Project[] = [];
 
-  constructor(private projectService: ProjectService) {
+  constructor() {
     addIcons({ addOutline, analyticsOutline, chatbubbleEllipsesOutline, homeOutline, personCircleOutline, walletOutline });
   }
 

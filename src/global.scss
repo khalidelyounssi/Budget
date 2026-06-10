@@ -161,14 +161,14 @@ ion-card,
 .brand-mark {
   position: relative;
   overflow: hidden;
-  background:
-    url("/assets/icon/app-logo.svg") center / 72% no-repeat,
-    linear-gradient(145deg, rgba(219, 234, 254, 0.95), rgba(187, 247, 208, 0.95)) !important;
+  background: linear-gradient(145deg, rgba(219, 234, 254, 0.95), rgba(187, 247, 208, 0.95)) !important;
 }
 
 .brand-mark::before,
 .brand-mark::after {
-  display: none;
+  position: absolute;
+  display: block;
+  content: "";
 }
 
 .brand-mark::before {

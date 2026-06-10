@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertController } from '@ionic/angular';
@@ -29,15 +29,15 @@ import { ProjectService } from '../services/project.service';
   ],
 })
 export class ProjectNotesPage {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private projectService = inject(ProjectService);
+  private alertController = inject(AlertController);
+
   project?: Project;
   noteSortMode: 'updated-desc' | 'created-desc' | 'title' = 'updated-desc';
 
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private projectService: ProjectService,
-    private alertController: AlertController,
-  ) {
+  constructor() {
     addIcons({ addOutline, arrowBackOutline, trashOutline });
   }
 
@@ -76,6 +76,7 @@ export class ProjectNotesPage {
   }
 
   async confirmDeleteNote(note: ProjectNote, event: Event): Promise<void> {
+    event.preventDefault();
     event.stopPropagation();
 
     if (!this.project) {

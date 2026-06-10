@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AlertController, ToastController } from '@ionic/angular';
@@ -25,13 +25,13 @@ import { ProjectService } from '../services/project.service';
   imports: [CommonModule, FormsModule, RouterLink, IonButton, IonCard, IonCardContent, IonContent, IonIcon, IonInput, IonItem],
 })
 export class ProfilePage {
+  projectService = inject(ProjectService);
+  private alertController = inject(AlertController);
+  private toastController = inject(ToastController);
+
   profileName = '';
 
-  constructor(
-    public projectService: ProjectService,
-    private alertController: AlertController,
-    private toastController: ToastController,
-  ) {
+  constructor() {
     addIcons({
       addOutline,
       analyticsOutline,

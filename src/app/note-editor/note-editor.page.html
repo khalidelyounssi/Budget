@@ -8,7 +8,7 @@
         <span>Édition de note</span>
         <strong>{{ pageTitle }}</strong>
       </div>
-      <button class="save-round" type="button" aria-label="Sauvegarder" (click)="saveNote()">
+      <button class="save-round" type="button" aria-label="Sauvegarder" [disabled]="isSaving" (click)="saveNote()">
         <ion-icon name="save-outline"></ion-icon>
       </button>
     </div>
@@ -46,9 +46,9 @@
           rows="11"
         ></ion-textarea>
 
-        <ion-button expand="block" class="save-button" (click)="saveNote()">
+        <ion-button expand="block" class="save-button" [disabled]="isSaving" (click)="saveNote()">
           <ion-icon name="save-outline" slot="start"></ion-icon>
-          Enregistrer la note
+          {{ isSaving ? 'Sauvegarde...' : 'Enregistrer la note' }}
         </ion-button>
       </ion-card-content>
     </ion-card>

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController, ToastController } from '@ionic/angular';
@@ -40,10 +40,17 @@ import { ProjectService } from '../services/project.service';
   ],
 })
 export class NoteEditorPage {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private projectService = inject(ProjectService);
+  private alertController = inject(AlertController);
+  private toastController = inject(ToastController);
+
   projects: Project[] = [];
   selectedProjectId = '';
   selectedNote?: ProjectNote;
   isUserNote = true;
+  isSaving = false;
   noteTitle = '';
   noteContent = '';
   returnTo: 'notes' | 'project' = 'notes';
@@ -51,19 +58,14 @@ export class NoteEditorPage {
   private originalTitle = '';
   private originalContent = '';
 
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private projectService: ProjectService,
-    private alertController: AlertController,
-    private toastController: ToastController,
-  ) {
+  constructor() {
     addIcons({ arrowBackOutline, saveOutline });
   }
 
   ionViewWillEnter(): void {
     this.projects = this.projectService.getProjects();
     this.returnTo = this.route.snapshot.queryParamMap.get('returnTo') === 'project' ? 'project' : 'notes';
+    this.isSaving = false;
 
     const projectId = this.route.snapshot.paramMap.get('projectId');
     const noteId = this.route.snapshot.paramMap.get('noteId');
@@ -74,7 +76,7 @@ export class NoteEditorPage {
       this.selectedNote = this.projectService.getUserNotes().find((note) => note.id === noteId);
 
       if (!this.selectedNote) {
-        this.router.navigateByUrl('/notes');
+        this.router.navigateByUrl(this.notesListLink);
         return;
       }
 
@@ -89,7 +91,7 @@ export class NoteEditorPage {
       this.selectedNote = project?.notes?.find((note) => note.id === noteId);
 
       if (!this.selectedNote) {
-        this.router.navigateByUrl('/notes');
+        this.router.navigateByUrl(this.notesListLink);
         return;
       }
 
@@ -106,7 +108,11 @@ export class NoteEditorPage {
   }
 
   get backLink(): string {
-    if (this.returnTo === 'project' && this.selectedProjectId) {
+    return this.notesListLink;
+  }
+
+  get notesListLink(): string {
+    if ((!this.isUserNote || this.returnTo === 'project') && this.selectedProjectId) {
       return `/project-notes/${this.selectedProjectId}`;
     }
 
@@ -118,6 +124,10 @@ export class NoteEditorPage {
   }
 
   async saveNote(): Promise<void> {
+    if (this.isSaving) {
+      return;
+    }
+
     if (!this.isUserNote && !this.selectedProjectId) {
       const toast = await this.toastController.create({
         message: 'Sélectionnez un projet avant de sauvegarder la note.',
@@ -126,6 +136,18 @@ export class NoteEditorPage {
       });
 
       await toast.present();
+      return;
+    }
+
+    if (!this.isUserNote && !this.projectService.getProjectById(this.selectedProjectId)) {
+      const toast = await this.toastController.create({
+        message: "Ce projet n'existe plus. La note n'a pas été sauvegardée.",
+        duration: 1600,
+        color: 'warning',
+      });
+
+      await toast.present();
+      await this.router.navigateByUrl('/notes');
       return;
     }
 
@@ -144,6 +166,7 @@ export class NoteEditorPage {
     }
 
     const now = new Date().toISOString();
+    this.isSaving = true;
 
     if (this.isUserNote && this.selectedNote) {
       this.projectService.updateUserNote({
@@ -177,6 +200,10 @@ export class NoteEditorPage {
       });
     }
 
+    this.noteTitle = title;
+    this.noteContent = content;
+    this.storeOriginalValues();
+
     const toast = await this.toastController.create({
       message: 'Note sauvegardée.',
       duration: 1200,
@@ -184,7 +211,7 @@ export class NoteEditorPage {
     });
 
     await toast.present();
-    await this.router.navigateByUrl(this.backLink);
+    await this.router.navigateByUrl(this.notesListLink, { replaceUrl: true });
   }
 
   async confirmLeave(): Promise<void> {

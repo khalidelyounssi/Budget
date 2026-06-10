@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertController, ToastController } from '@ionic/angular';
@@ -62,6 +62,13 @@ import { ProjectService } from '../services/project.service';
   ],
 })
 export class ProjectDetailsPage {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private formBuilder = inject(FormBuilder);
+  private projectService = inject(ProjectService);
+  private alertController = inject(AlertController);
+  private toastController = inject(ToastController);
+
   project?: Project;
   showExpenseForm = false;
   editingExpenseId?: string;
@@ -77,14 +84,7 @@ export class ProjectDetailsPage {
     note: [''],
   });
 
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private formBuilder: FormBuilder,
-    private projectService: ProjectService,
-    private alertController: AlertController,
-    private toastController: ToastController,
-  ) {
+  constructor() {
     addIcons({
       addCircleOutline,
       arrowBackOutline,
