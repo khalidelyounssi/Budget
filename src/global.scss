@@ -45,6 +45,8 @@
 
 html,
 body {
+  min-width: 320px;
+  min-height: 100%;
   overflow-x: hidden;
 }
 
@@ -204,12 +206,10 @@ ion-card,
 @keyframes page-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -270,22 +270,51 @@ ion-card,
 }
 
 @media (max-width: 600px) {
+  .filter-chip.soft {
+    display: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  ion-content {
+    --padding-top: env(safe-area-inset-top);
+    --padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /*
+   * F telephone makaynch phone frame: l'app katakhod size dyal screen kamla
+   * w katsib espace l notch/home indicator b safe-area dyal device.
+   */
   .app-screen {
-    width: min(100%, 430px) !important;
-    max-width: 430px !important;
-    margin-right: 0 !important;
-    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .app-screen:not(.page-content) {
+    padding-top: calc(18px + env(safe-area-inset-top)) !important;
+    padding-right: max(18px, env(safe-area-inset-right)) !important;
+    padding-bottom: calc(118px + env(safe-area-inset-bottom)) !important;
+    padding-left: max(18px, env(safe-area-inset-left)) !important;
+  }
+
+  .page-content {
+    padding-top: calc(18px + env(safe-area-inset-top)) !important;
+    padding-right: max(18px, env(safe-area-inset-right)) !important;
+    padding-bottom: calc(118px + env(safe-area-inset-bottom)) !important;
+    padding-left: max(18px, env(safe-area-inset-left)) !important;
   }
 
   .bottom-nav {
+    position: fixed !important;
     right: auto !important;
-    left: 14px !important;
-    width: calc(min(100vw, 430px) - 28px) !important;
-    max-width: 402px !important;
+    bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+    left: calc(14px + env(safe-area-inset-left)) !important;
+    width: calc(100vw - 28px - env(safe-area-inset-left) - env(safe-area-inset-right)) !important;
+    max-width: none !important;
     transform: none !important;
-  }
-
-  .filter-chip.soft {
-    display: none !important;
   }
 }
