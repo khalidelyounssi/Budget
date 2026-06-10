@@ -1,0 +1,62 @@
+<ion-content [fullscreen]="true">
+  <section class="app-screen page-content">
+    <div class="status-bar">
+      <strong>9:41</strong>
+      <div class="dynamic-island"></div>
+      <span>▮▮▮ ᯤ ▰</span>
+    </div>
+
+    <div class="top-row">
+      <button class="round-action" type="button" aria-label="Retour" (click)="confirmLeave()">
+        <ion-icon name="arrow-back-outline"></ion-icon>
+      </button>
+      <div>
+        <span>Édition de note</span>
+        <strong>{{ pageTitle }}</strong>
+      </div>
+      <button class="save-round" type="button" aria-label="Sauvegarder" (click)="saveNote()">
+        <ion-icon name="save-outline"></ion-icon>
+      </button>
+    </div>
+
+    <ion-card class="editor-card">
+      <ion-card-content>
+        <div class="editor-header">
+          <span>NOTES</span>
+          <h1>Rédiger une note</h1>
+        </div>
+
+        <ion-select
+          *ngIf="!isUserNote"
+          [(ngModel)]="selectedProjectId"
+          [disabled]="!!selectedNote"
+          [ngModelOptions]="{ standalone: true }"
+          label="Projet lié"
+          label-placement="stacked"
+        >
+          <ion-select-option *ngFor="let project of projects" [value]="project.id">{{ project.name }}</ion-select-option>
+        </ion-select>
+
+        <ion-input
+          [(ngModel)]="noteTitle"
+          [ngModelOptions]="{ standalone: true }"
+          class="title-input"
+          placeholder="Titre de la note"
+        ></ion-input>
+
+        <ion-textarea
+          [(ngModel)]="noteContent"
+          [ngModelOptions]="{ standalone: true }"
+          autoGrow="true"
+          placeholder="Rédigez vos observations, décisions ou points à suivre."
+          rows="11"
+        ></ion-textarea>
+
+        <ion-button expand="block" class="save-button" (click)="saveNote()">
+          <ion-icon name="save-outline" slot="start"></ion-icon>
+          Enregistrer la note
+        </ion-button>
+      </ion-card-content>
+    </ion-card>
+  </section>
+</ion-content>

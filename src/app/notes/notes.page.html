@@ -1,0 +1,94 @@
+<ion-content [fullscreen]="true">
+  <section class="app-screen page-content">
+    <div class="status-bar">
+      <strong>9:41</strong>
+      <div class="dynamic-island"></div>
+      <span>▮▮▮ ᯤ ▰</span>
+    </div>
+
+    <div class="top-row">
+      <button class="round-action" routerLink="/home" type="button" aria-label="Retour">
+        <ion-icon name="home-outline"></ion-icon>
+      </button>
+      <div>
+        <span>Carnet de notes</span>
+        <strong>Notes personnelles</strong>
+      </div>
+      <button class="save-round" routerLink="/note-editor/new" type="button" aria-label="Nouvelle note">
+        <ion-icon name="add-outline"></ion-icon>
+      </button>
+    </div>
+
+    <div class="notes-hero">
+      <span>Notes</span>
+      <div class="notes-hero-row">
+        <h1>Notes personnelles</h1>
+        <button class="new-note-button" routerLink="/note-editor/new" type="button">
+          <ion-icon name="add-outline" slot="start"></ion-icon>
+          Nouvelle note
+        </button>
+      </div>
+      <p>Centralisez les remarques, décisions et points à suivre.</p>
+    </div>
+
+    <div class="notes-tools" [class.empty-state]="notes.length === 0">
+      <span>{{ notes.length }} note(s)</span>
+      <ion-item class="sort-item" *ngIf="notes.length > 0">
+        <ion-select [(ngModel)]="noteSortMode" interface="popover" aria-label="Trier les notes">
+          <ion-select-option value="updated-desc">Modifiées</ion-select-option>
+          <ion-select-option value="created-desc">Créées</ion-select-option>
+          <ion-select-option value="title">Titre A-Z</ion-select-option>
+        </ion-select>
+      </ion-item>
+    </div>
+
+    <p class="empty-notes" *ngIf="notes.length === 0">
+      Aucune note enregistrée pour le moment.
+    </p>
+
+    <div class="notes-list" *ngIf="notes.length > 0">
+      <ion-card
+        class="note-card"
+        *ngFor="let note of getSortedNotes()"
+        [routerLink]="['/note-editor/user', note.id]"
+        [queryParams]="{ returnTo: 'notes' }"
+      >
+        <ion-card-content>
+          <div class="note-card-header">
+            <div>
+              <span class="project-name">Note personnelle</span>
+              <h2>{{ note.title }}</h2>
+              <span>{{ note.updatedAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+            </div>
+            <button type="button" aria-label="Supprimer la note" (click)="confirmDeleteNote(note, $event)">
+              <ion-icon name="trash-outline"></ion-icon>
+            </button>
+          </div>
+          <p>{{ note.content }}</p>
+        </ion-card-content>
+      </ion-card>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Navigation principale">
+      <button class="nav-item" routerLink="/home" type="button">
+        <ion-icon name="home-outline"></ion-icon>
+        <span>Accueil</span>
+      </button>
+      <button class="nav-item" routerLink="/stats" type="button">
+        <ion-icon name="analytics-outline"></ion-icon>
+        <span>Suivi</span>
+      </button>
+      <button class="add-nav" routerLink="/add-project" type="button" aria-label="Ajouter un projet">
+        <ion-icon name="add-outline"></ion-icon>
+      </button>
+      <button class="nav-item active" type="button">
+        <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+        <span>Notes</span>
+      </button>
+      <button class="nav-item" routerLink="/profile" type="button">
+        <ion-icon name="person-circle-outline"></ion-icon>
+        <span>Profil</span>
+      </button>
+    </nav>
+  </section>
+</ion-content>

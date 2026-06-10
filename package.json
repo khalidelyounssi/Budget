@@ -1,15 +1,21 @@
 {
-  "name": "budget-projects",
+  "name": "budget-manager",
   "version": "0.0.1",
-  "author": "Ionic Framework",
-  "homepage": "https://ionicframework.com/",
+  "author": "Budget Manager",
+  "homepage": "./",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "cap:sync": "ionic build && npx cap sync",
+    "android": "ionic build && npx cap open android",
+    "ios": "ionic build && npx cap open ios"
+  },
+  "engines": {
+    "node": ">=22 <23"
   },
   "private": true,
   "dependencies": {
@@ -21,9 +27,12 @@
     "@angular/platform-browser": "^20.0.0",
     "@angular/platform-browser-dynamic": "^20.0.0",
     "@angular/router": "^20.0.0",
+    "@angular/service-worker": "^20.3.24",
+    "@capacitor/android": "^8.4.0",
     "@capacitor/app": "8.1.0",
     "@capacitor/core": "8.4.0",
     "@capacitor/haptics": "8.0.2",
+    "@capacitor/ios": "^8.4.0",
     "@capacitor/keyboard": "8.0.3",
     "@capacitor/status-bar": "8.0.2",
     "@ionic/angular": "^8.0.0",
@@ -60,5 +69,5 @@
     "karma-jasmine-html-reporter": "~2.1.0",
     "typescript": "~5.9.0"
   },
-  "description": "An Ionic project"
+  "description": "Application Ionic Angular pour suivre les budgets, dépenses et notes de projets."
 }

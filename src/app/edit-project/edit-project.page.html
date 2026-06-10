@@ -1,0 +1,67 @@
+<ion-content [fullscreen]="true">
+  <section class="app-screen page-content" *ngIf="project">
+    <div class="status-bar">
+      <strong>9:41</strong>
+      <div class="dynamic-island"></div>
+      <span>▮▮▮ ᯤ ▰</span>
+    </div>
+
+    <div class="top-row">
+      <button class="round-action" [routerLink]="['/project-details', project.id]" type="button" aria-label="Retour">
+        <ion-icon name="arrow-back-outline"></ion-icon>
+      </button>
+      <div>
+        <span>Modifier le projet</span>
+        <strong>{{ project.name }}</strong>
+      </div>
+      <div class="avatar brand-mark" aria-hidden="true"></div>
+    </div>
+
+    <div class="form-intro">
+      <p class="eyebrow">Mise à jour</p>
+      <h1>Informations du projet</h1>
+      <p>Ajustez les données principales sans modifier l'historique des dépenses.</p>
+    </div>
+
+    <ion-card class="form-card">
+      <ion-card-content>
+        <form [formGroup]="projectForm" (ngSubmit)="updateProject()">
+          <div class="field-group">
+            <label class="field-label" for="project-name">Nom du projet *</label>
+            <ion-item class="input-item">
+              <ion-input id="project-name" formControlName="name"></ion-input>
+            </ion-item>
+          </div>
+          <ion-text color="danger" *ngIf="projectForm.controls.name.touched && projectForm.controls.name.invalid">
+            <small>Le nom du projet est obligatoire.</small>
+          </ion-text>
+
+          <div class="field-group">
+            <label class="field-label" for="project-description">Description</label>
+            <ion-item class="input-item textarea-item">
+              <ion-textarea id="project-description" formControlName="description" rows="4"></ion-textarea>
+            </ion-item>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="project-budget">Budget estimé en DH *</label>
+            <ion-item class="input-item">
+              <ion-input id="project-budget" formControlName="estimatedBudget" min="0.01" type="number"></ion-input>
+            </ion-item>
+          </div>
+          <ion-text
+            color="danger"
+            *ngIf="projectForm.controls.estimatedBudget.touched && projectForm.controls.estimatedBudget.invalid"
+          >
+            <small>Le budget est obligatoire et doit être un nombre positif.</small>
+          </ion-text>
+
+          <ion-button expand="block" type="submit" class="submit-button">
+            <ion-icon name="save-outline" slot="start"></ion-icon>
+            Enregistrer les changements
+          </ion-button>
+        </form>
+      </ion-card-content>
+    </ion-card>
+  </section>
+</ion-content>

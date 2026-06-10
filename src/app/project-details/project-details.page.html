@@ -1,0 +1,200 @@
+<ion-content [fullscreen]="true">
+  <section class="app-screen page-content" *ngIf="project">
+    <div class="status-bar">
+      <strong>9:41</strong>
+      <div class="dynamic-island"></div>
+      <span>▮▮▮ ᯤ ▰</span>
+    </div>
+
+    <div class="top-row">
+      <button class="round-action" routerLink="/home" type="button" aria-label="Retour">
+        <ion-icon name="arrow-back-outline"></ion-icon>
+      </button>
+      <div>
+        <span>Suivi du projet</span>
+        <strong>{{ project.name }}</strong>
+      </div>
+      <button class="round-action" [routerLink]="['/edit-project', project.id]" type="button" aria-label="Modifier">
+        <ion-icon name="create-outline"></ion-icon>
+      </button>
+    </div>
+
+    <ion-card class="overview-card">
+      <ion-card-header>
+        <div class="header-row">
+          <div>
+            <ion-card-title>{{ project.name }}</ion-card-title>
+            <ion-card-subtitle>Créé le {{ project.createdAt | date: 'dd/MM/yyyy' }}</ion-card-subtitle>
+          </div>
+          <span class="status-pill" [class.exceeded]="remainingBudget < 0">
+            <span></span>
+            {{ remainingBudget < 0 ? 'Dépassé' : 'Conforme' }}
+          </span>
+        </div>
+      </ion-card-header>
+
+      <ion-card-content>
+        <p class="description">{{ project.description || 'Description non renseignée' }}</p>
+
+        <div class="details-grid">
+          <div>
+            <span>Budget prévu</span>
+            <strong>{{ formatMoney(project.estimatedBudget) }}</strong>
+          </div>
+          <div>
+            <span>Dépenses engagées</span>
+            <strong>{{ formatMoney(totalExpenses) }}</strong>
+          </div>
+        </div>
+
+        <div class="consumption-row">
+          <span>Avancement</span>
+          <strong [class.exceeded]="remainingBudget < 0">
+            {{ remainingBudget < 0 ? 'Dépassement : ' + formatMoney(remainingBudget * -1) : budgetMessage }}
+          </strong>
+        </div>
+
+        <div class="progress-track">
+          <span class="progress-used" [style.width.%]="budgetUsedWidth"></span>
+          <span class="progress-exceeded" [style.width.%]="budgetExceededWidth"></span>
+        </div>
+
+        <div class="overview-actions">
+          <ion-button fill="outline" [routerLink]="['/edit-project', project.id]">
+            <ion-icon name="create-outline" slot="start"></ion-icon>
+            Modifier
+          </ion-button>
+          <ion-button fill="outline" (click)="exportProject()">
+            <ion-icon name="document-text-outline" slot="start"></ion-icon>
+            PDF
+          </ion-button>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <div class="section-title-row">
+      <div>
+        <h2>Dépenses enregistrées</h2>
+        <p>{{ filteredExpenses.length }} / {{ project.expenses.length }} dépense(s)</p>
+      </div>
+      <ion-button [color]="showExpenseForm ? 'medium' : 'primary'" (click)="toggleExpenseForm()">
+        <ion-icon [name]="showExpenseForm ? 'close-circle-outline' : 'add-circle-outline'" slot="start"></ion-icon>
+        {{ showExpenseForm ? 'Fermer' : 'Ajouter une dépense' }}
+      </ion-button>
+    </div>
+
+    <div class="expense-tools" *ngIf="project.expenses.length > 0">
+      <div class="expense-search">
+        <ion-icon name="search-outline"></ion-icon>
+        <ion-input [(ngModel)]="expenseSearchTerm" placeholder="Chercher dépense, catégorie ou note"></ion-input>
+      </div>
+      <ion-item class="sort-item">
+        <ion-select [(ngModel)]="expenseSortMode" interface="popover" aria-label="Trier les dépenses">
+          <ion-select-option value="newest">Récentes</ion-select-option>
+          <ion-select-option value="oldest">Anciennes</ion-select-option>
+          <ion-select-option value="amount-desc">Montant haut</ion-select-option>
+          <ion-select-option value="amount-asc">Montant bas</ion-select-option>
+          <ion-select-option value="name">Nom A-Z</ion-select-option>
+        </ion-select>
+      </ion-item>
+    </div>
+
+    <ion-card class="expense-form-card" *ngIf="showExpenseForm">
+      <ion-card-header>
+        <ion-card-title>{{ editingExpenseId ? 'Modifier la dépense' : 'Ajouter une dépense' }}</ion-card-title>
+        <ion-card-subtitle>Renseignez une dépense liée au projet.</ion-card-subtitle>
+      </ion-card-header>
+
+      <ion-card-content>
+        <form [formGroup]="expenseForm" (ngSubmit)="addExpense()">
+          <div class="field-group">
+            <label class="field-label" for="expense-name">Nom de la dépense *</label>
+            <ion-item class="input-item">
+              <ion-input id="expense-name" formControlName="name" placeholder="Ex: Achat de peinture"></ion-input>
+            </ion-item>
+          </div>
+          <ion-text color="danger" *ngIf="expenseForm.controls.name.touched && expenseForm.controls.name.invalid">
+            <small>Le nom de la dépense est obligatoire.</small>
+          </ion-text>
+
+          <div class="field-group">
+            <label class="field-label" for="expense-amount">Montant en DH *</label>
+            <ion-item class="input-item">
+              <ion-input id="expense-amount" formControlName="amount" min="0.01" placeholder="Ex: 500" type="number"></ion-input>
+            </ion-item>
+          </div>
+          <ion-text color="danger" *ngIf="expenseForm.controls.amount.touched && expenseForm.controls.amount.invalid">
+            <small>Le montant est obligatoire et doit être positif.</small>
+          </ion-text>
+
+          <div class="field-group">
+            <label class="field-label" for="expense-date">Date *</label>
+            <ion-item class="input-item">
+              <ion-icon name="calendar-outline" slot="start"></ion-icon>
+              <ion-input id="expense-date" formControlName="date" type="date"></ion-input>
+            </ion-item>
+          </div>
+          <ion-text color="danger" *ngIf="expenseForm.controls.date.touched && expenseForm.controls.date.invalid">
+            <small>La date est obligatoire.</small>
+          </ion-text>
+
+          <div class="field-group">
+            <label class="field-label">Catégorie</label>
+            <ion-item class="input-item">
+              <ion-select formControlName="category" placeholder="Choisir une catégorie" interface="popover">
+                <ion-select-option value="">Sans catégorie</ion-select-option>
+                <ion-select-option *ngFor="let category of expenseCategories" [value]="category">
+                  {{ category }}
+                </ion-select-option>
+              </ion-select>
+            </ion-item>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="expense-note">Note optionnelle</label>
+            <ion-item class="input-item textarea-item">
+              <ion-textarea id="expense-note" formControlName="note" placeholder="Ex: fournisseur, référence de facture, remarque interne" rows="3"></ion-textarea>
+            </ion-item>
+          </div>
+
+          <ion-button expand="block" type="submit" class="submit-button">
+            <ion-icon [name]="editingExpenseId ? 'pencil-outline' : 'add-circle-outline'" slot="start"></ion-icon>
+            {{ editingExpenseId ? 'Enregistrer la modification' : 'Ajouter la dépense' }}
+          </ion-button>
+          <ion-button *ngIf="editingExpenseId" expand="block" fill="clear" type="button" (click)="cancelEditExpense()">
+            Annuler la modification
+          </ion-button>
+        </form>
+      </ion-card-content>
+    </ion-card>
+
+    <p class="empty-text" *ngIf="project.expenses.length === 0">Aucune dépense ajoutée.</p>
+    <p class="empty-text" *ngIf="project.expenses.length > 0 && filteredExpenses.length === 0">
+      Aucune dépense ne correspond à cette recherche.
+    </p>
+
+    <div class="expenses-grid" *ngIf="filteredExpenses.length > 0">
+      <ion-card class="expense-card" *ngFor="let expense of filteredExpenses">
+        <ion-card-content>
+          <div class="expense-row">
+            <div>
+              <h3>{{ expense.name }}</h3>
+              <p>{{ expense.date | date: 'dd/MM/yyyy' }}</p>
+              <span class="category-pill" *ngIf="expense.category">{{ expense.category }}</span>
+              <p *ngIf="expense.note" class="note">{{ expense.note }}</p>
+            </div>
+            <div class="expense-side">
+              <strong>{{ formatMoney(expense.amount) }}</strong>
+              <ion-button color="primary" fill="clear" size="small" (click)="editExpense(expense)">
+                <ion-icon name="pencil-outline" slot="icon-only"></ion-icon>
+              </ion-button>
+              <ion-button color="danger" fill="clear" size="small" (click)="confirmDeleteExpense(expense)">
+                <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+              </ion-button>
+            </div>
+          </div>
+        </ion-card-content>
+      </ion-card>
+    </div>
+  </section>
+</ion-content>
