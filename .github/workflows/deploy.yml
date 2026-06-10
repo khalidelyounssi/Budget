@@ -15,8 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -25,13 +28,24 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Ionic Angular app
         run: npm run build -- --base-href /Budget-Manager/
+
+      - name: Add Angular routing fallback
+        run: cp www/index.html www/404.html
+
+      - name: Verify build output
+        run: |
+          test -f www/index.html
+          test -f www/404.html
+          grep -q '<base href="/Budget-Manager/">' www/index.html
+          grep -q '<app-root' www/index.html
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
@@ -42,4 +56,5 @@ jobs:
           path: www
 
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
