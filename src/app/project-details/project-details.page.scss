@@ -303,7 +303,51 @@ ion-card {
 }
 
 .expense-form-card {
-  animation: form-in 220ms ease-out;
+  overflow: hidden;
+  border-color: rgba(79, 141, 247, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 252, 255, 0.92)),
+    #fff;
+  animation: form-in 180ms ease-out;
+}
+
+.expense-form-card ion-card-header {
+  padding-bottom: 10px;
+}
+
+.expense-form-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.expense-form-header ion-card-title {
+  color: #101828;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.expense-form-header ion-card-subtitle {
+  margin-top: 6px;
+  color: #64748b;
+  text-transform: none;
+}
+
+.expense-form-header > span {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.expense-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
 }
 
 .field-group {
@@ -320,9 +364,10 @@ ion-card {
 
 .input-item {
   overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  --background: #f8fafc;
+  min-height: 54px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 18px;
+  --background: #ffffff;
   --border-color: transparent;
   --inner-border-width: 0;
   --padding-start: 14px;
@@ -335,9 +380,15 @@ ion-card {
 
 .input-item:hover,
 .input-item:focus-within {
-  border-color: rgba(15, 118, 110, 0.35);
-  box-shadow: 0 12px 28px rgba(15, 118, 110, 0.11);
+  border-color: rgba(79, 141, 247, 0.42);
+  box-shadow: 0 12px 28px rgba(79, 141, 247, 0.12);
   transform: translateY(-1px);
+}
+
+.amount-item span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .textarea-item {
@@ -353,6 +404,8 @@ ion-text small {
   margin-top: 20px;
   min-height: 48px;
   font-weight: 700;
+  --border-radius: 18px;
+  --box-shadow: 0 14px 30px rgba(79, 141, 247, 0.22);
 }
 
 .empty-text {
@@ -483,6 +536,7 @@ ion-badge {
   }
 
   .details-grid,
+  .expense-form-grid,
   .expense-tools,
   .expenses-grid {
     grid-template-columns: 1fr;

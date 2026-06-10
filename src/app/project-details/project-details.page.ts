@@ -71,6 +71,7 @@ export class ProjectDetailsPage {
 
   project?: Project;
   showExpenseForm = false;
+  isSavingExpense = false;
   editingExpenseId?: string;
   expenseSearchTerm = '';
   expenseSortMode: 'newest' | 'oldest' | 'amount-desc' | 'amount-asc' | 'name' = 'newest';
@@ -204,12 +205,13 @@ export class ProjectDetailsPage {
   }
 
   cancelEditExpense(): void {
+    this.isSavingExpense = false;
     this.editingExpenseId = undefined;
     this.resetExpenseForm();
   }
 
   async addExpense(): Promise<void> {
-    if (!this.project) {
+    if (!this.project || this.isSavingExpense) {
       return;
     }
 
@@ -220,6 +222,8 @@ export class ProjectDetailsPage {
 
     const formValue = this.expenseForm.getRawValue();
     const isEditing = Boolean(this.editingExpenseId);
+    this.isSavingExpense = true;
+    this.expenseForm.disable();
 
     const expense: Expense = {
       id: this.editingExpenseId ?? crypto.randomUUID(),
@@ -241,6 +245,8 @@ export class ProjectDetailsPage {
     this.resetExpenseForm();
     this.showExpenseForm = false;
     this.editingExpenseId = undefined;
+    this.isSavingExpense = false;
+    this.expenseForm.enable();
 
     const toast = await this.toastController.create({
       message: isEditing ? 'Dépense modifiée.' : 'Dépense sauvegardée.',
@@ -283,6 +289,7 @@ export class ProjectDetailsPage {
   }
 
   private resetExpenseForm(): void {
+    this.expenseForm.enable();
     this.expenseForm.reset({
       name: '',
       amount: null,

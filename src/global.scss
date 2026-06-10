@@ -119,7 +119,7 @@ ion-button:active {
 }
 
 .app-screen {
-  animation: page-enter 320ms ease-out both;
+  animation: none;
 }
 
 ion-card,
@@ -131,12 +131,13 @@ ion-card,
 .expense-tools,
 .notes-tools {
   animation: soft-rise 360ms ease-out both;
+  animation-duration: 180ms;
 }
 
 .project-card,
 .note-card,
 .expense-card {
-  animation: card-pop 340ms ease-out both;
+  animation: card-pop 200ms ease-out both;
 }
 
 .project-card:nth-child(2),
@@ -216,7 +217,7 @@ ion-card,
 @keyframes soft-rise {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(4px);
   }
 
   to {
@@ -228,7 +229,7 @@ ion-card,
 @keyframes card-pop {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.98);
+    transform: translateY(6px) scale(0.99);
   }
 
   to {

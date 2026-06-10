@@ -95,8 +95,13 @@
 
     <ion-card class="expense-form-card" *ngIf="showExpenseForm">
       <ion-card-header>
-        <ion-card-title>{{ editingExpenseId ? 'Modifier la dépense' : 'Ajouter une dépense' }}</ion-card-title>
-        <ion-card-subtitle>Renseignez une dépense liée au projet.</ion-card-subtitle>
+        <div class="expense-form-header">
+          <div>
+            <ion-card-title>{{ editingExpenseId ? 'Modifier la dépense' : 'Nouvelle dépense' }}</ion-card-title>
+            <ion-card-subtitle>Enregistrez un coût réel lié à ce projet.</ion-card-subtitle>
+          </div>
+          <span>{{ editingExpenseId ? 'Édition' : 'Ajout' }}</span>
+        </div>
       </ion-card-header>
 
       <ion-card-content>
@@ -111,26 +116,33 @@
             <small>Le nom de la dépense est obligatoire.</small>
           </ion-text>
 
-          <div class="field-group">
-            <label class="field-label" for="expense-amount">Montant en DH *</label>
-            <ion-item class="input-item">
-              <ion-input id="expense-amount" formControlName="amount" min="0.01" placeholder="Ex: 500" type="number"></ion-input>
-            </ion-item>
-          </div>
-          <ion-text color="danger" *ngIf="expenseForm.controls.amount.touched && expenseForm.controls.amount.invalid">
-            <small>Le montant est obligatoire et doit être positif.</small>
-          </ion-text>
+          <div class="expense-form-grid">
+            <div>
+              <div class="field-group">
+                <label class="field-label" for="expense-amount">Montant en DH *</label>
+                <ion-item class="input-item amount-item">
+                  <ion-input id="expense-amount" formControlName="amount" min="0.01" placeholder="Ex: 500" type="number"></ion-input>
+                  <span slot="end">DH</span>
+                </ion-item>
+              </div>
+              <ion-text color="danger" *ngIf="expenseForm.controls.amount.touched && expenseForm.controls.amount.invalid">
+                <small>Le montant est obligatoire et doit être positif.</small>
+              </ion-text>
+            </div>
 
-          <div class="field-group">
-            <label class="field-label" for="expense-date">Date *</label>
-            <ion-item class="input-item">
-              <ion-icon name="calendar-outline" slot="start"></ion-icon>
-              <ion-input id="expense-date" formControlName="date" type="date"></ion-input>
-            </ion-item>
+            <div>
+              <div class="field-group">
+                <label class="field-label" for="expense-date">Date *</label>
+                <ion-item class="input-item">
+                  <ion-icon name="calendar-outline" slot="start"></ion-icon>
+                  <ion-input id="expense-date" formControlName="date" type="date"></ion-input>
+                </ion-item>
+              </div>
+              <ion-text color="danger" *ngIf="expenseForm.controls.date.touched && expenseForm.controls.date.invalid">
+                <small>La date est obligatoire.</small>
+              </ion-text>
+            </div>
           </div>
-          <ion-text color="danger" *ngIf="expenseForm.controls.date.touched && expenseForm.controls.date.invalid">
-            <small>La date est obligatoire.</small>
-          </ion-text>
 
           <div class="field-group">
             <label class="field-label">Catégorie</label>
@@ -151,11 +163,17 @@
             </ion-item>
           </div>
 
-          <ion-button expand="block" type="submit" class="submit-button">
+          <ion-button expand="block" type="submit" class="submit-button" [disabled]="isSavingExpense">
             <ion-icon [name]="editingExpenseId ? 'pencil-outline' : 'add-circle-outline'" slot="start"></ion-icon>
-            {{ editingExpenseId ? 'Enregistrer la modification' : 'Ajouter la dépense' }}
+            {{
+              isSavingExpense
+                ? 'Sauvegarde...'
+                : editingExpenseId
+                  ? 'Enregistrer la modification'
+                  : 'Ajouter la dépense'
+            }}
           </ion-button>
-          <ion-button *ngIf="editingExpenseId" expand="block" fill="clear" type="button" (click)="cancelEditExpense()">
+          <ion-button *ngIf="editingExpenseId" expand="block" fill="clear" type="button" [disabled]="isSavingExpense" (click)="cancelEditExpense()">
             Annuler la modification
           </ion-button>
         </form>

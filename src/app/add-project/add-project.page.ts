@@ -44,6 +44,7 @@ export class AddProjectPage {
   private projectService = inject(ProjectService);
   private router = inject(Router);
   private toastController = inject(ToastController);
+  isSavingProject = false;
 
   projectForm = this.formBuilder.nonNullable.group({
     name: ['', Validators.required],
@@ -56,12 +57,18 @@ export class AddProjectPage {
   }
 
   async addProject(): Promise<void> {
+    if (this.isSavingProject) {
+      return;
+    }
+
     if (this.projectForm.invalid) {
       this.projectForm.markAllAsTouched();
       return;
     }
 
     const formValue = this.projectForm.getRawValue();
+    this.isSavingProject = true;
+    this.projectForm.disable();
 
     // Le projet contient déjà un tableau de dépenses vide pour faciliter les calculs.
     const project: Project = {
@@ -83,6 +90,6 @@ export class AddProjectPage {
     });
 
     await toast.present();
-    await this.router.navigateByUrl('/home');
+    await this.router.navigateByUrl('/home', { replaceUrl: true });
   }
 }

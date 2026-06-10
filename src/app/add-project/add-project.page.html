@@ -55,9 +55,9 @@
             <small>Le budget est obligatoire et doit être un nombre positif.</small>
           </ion-text>
 
-          <ion-button expand="block" type="submit" class="submit-button">
+          <ion-button expand="block" type="submit" class="submit-button" [disabled]="isSavingProject">
             <ion-icon name="save-outline" slot="start"></ion-icon>
-            Enregistrer le projet
+            {{ isSavingProject ? 'Enregistrement...' : 'Enregistrer le projet' }}
           </ion-button>
         </form>
       </ion-card-content>
