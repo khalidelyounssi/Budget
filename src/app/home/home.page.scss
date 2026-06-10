@@ -15,22 +15,6 @@ ion-content {
   box-shadow: 0 24px 70px rgba(31, 63, 78, 0.18);
 }
 
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 42px;
-  color: #111827;
-  font-size: 15px;
-}
-
-.dynamic-island {
-  width: 128px;
-  height: 36px;
-  border-radius: 999px;
-  background: #000;
-}
-
 .top-row,
 .profile-block,
 .search-row,
@@ -515,11 +499,6 @@ ion-content {
   .summary-card {
     grid-template-columns: 1fr;
   }
-
-  .dynamic-island {
-    width: 106px;
-  }
-
   .headline h1 {
     font-size: 27px;
   }

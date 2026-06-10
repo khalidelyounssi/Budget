@@ -18,22 +18,6 @@ ion-content {
   padding: 14px 26px 54px;
 }
 
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 42px;
-  color: #111827;
-  font-size: 15px;
-}
-
-.dynamic-island {
-  width: 128px;
-  height: 36px;
-  border-radius: 999px;
-  background: #000;
-}
-
 .top-row {
   display: grid;
   grid-template-columns: 58px 1fr 58px;
