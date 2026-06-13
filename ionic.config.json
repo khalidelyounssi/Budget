@@ -1,7 +1,0 @@
-{
-  "name": "budget-manager",
-  "integrations": {
-    "capacitor": {}
-  },
-  "type": "angular-standalone"
-}

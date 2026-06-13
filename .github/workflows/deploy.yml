@@ -1,4 +1,4 @@
-name: Deploy Ionic App to GitHub Pages
+name: Deploy Static Budget Manager to GitHub Pages
 
 on:
   push:
@@ -25,27 +25,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Ionic Angular app
-        run: npm run build -- --base-href /Budget-Manager/
-
-      - name: Add Angular routing fallback
-        run: cp www/index.html www/404.html
-
-      - name: Verify build output
+      - name: Prepare static site
         run: |
-          test -f www/index.html
-          test -f www/404.html
-          grep -q '<base href="/Budget-Manager/">' www/index.html
-          grep -q '<app-root' www/index.html
+          mkdir -p dist
+          cp index.html dist/index.html
+          cp index.html dist/404.html
+          cp -R css dist/css
+          cp -R js dist/js
+
+      - name: Verify static files
+        run: |
+          test -f dist/index.html
+          test -f dist/404.html
+          test -f dist/css/style.css
+          test -f dist/js/app.js
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
@@ -53,7 +46,7 @@ jobs:
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: www
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment
