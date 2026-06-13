@@ -1,6 +1,6 @@
-# Budget Manager
+# Budget
 
-Static mobile-style budget manager built with HTML, CSS, Vanilla JavaScript, and Ionic Web Components.
+Static mobile-style budget manager built with HTML, CSS, Vanilla JavaScript, and Ionic Web Components from CDN.
 
 Features:
 
@@ -11,6 +11,14 @@ Features:
 - Notes view
 - Bottom mobile navigation
 - LocalStorage only
+
+## Structure
+
+```text
+index.html
+css/style.css
+js/app.js
+```
 
 ## Run locally
 
@@ -28,9 +36,16 @@ http://localhost:8080
 
 ## Deploy
 
-GitHub Pages is configured with GitHub Actions. Push to `main`, then open:
+Use GitHub Pages with:
 
 ```text
-https://khalidelyounssi.github.io/Budget-Manager/
+Source: Deploy from a branch
+Branch: main
+Folder: /root
 ```
-# Budget
+
+Final URL:
+
+```text
+https://khalidelyounssi.github.io/Budget/
+```
