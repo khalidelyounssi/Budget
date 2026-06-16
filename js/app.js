@@ -1,12 +1,16 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "budget-projects-manager-projects";
-  const NOTES_KEY = "budget-projects-manager-notes";
+  const DB_NAME = "BudgetManagerDB";
+  const DB_VERSION = 1;
+  const PROJECT_STORE = "projects";
+  const NOTE_STORE = "notes";
   const app = document.getElementById("app");
 
-  let projects = loadProjects();
-  let notes = loadNotes();
+  let databasePromise = null;
+  let projects = [];
+  let notes = [];
+  let appReady = false;
   let currentProjectId = null;
   let projectFilter = "active";
   let expenseModalOpen = false;
@@ -16,14 +20,122 @@
   let expenseSaving = false;
   let noteSaving = false;
 
-  function loadProjects() {
-    try {
-      const savedProjects = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-      return Array.isArray(savedProjects) ? savedProjects.map(normalizeProject) : [];
-    } catch (error) {
-      console.warn("Unable to read projects from LocalStorage.", error);
-      return [];
+  // IndexedDB is the app's only storage layer.
+  // We keep one store for projects and one for notes so the app stays simple.
+  function openDatabase() {
+    if (databasePromise) {
+      return databasePromise;
     }
+
+    databasePromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+      request.onupgradeneeded = () => {
+        const database = request.result;
+
+        if (!database.objectStoreNames.contains(PROJECT_STORE)) {
+          database.createObjectStore(PROJECT_STORE, { keyPath: "id" });
+        }
+
+        if (!database.objectStoreNames.contains(NOTE_STORE)) {
+          database.createObjectStore(NOTE_STORE, { keyPath: "id" });
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Impossible d'ouvrir IndexedDB."));
+    });
+
+    return databasePromise;
+  }
+
+  function requestToPromise(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Erreur IndexedDB."));
+    });
+  }
+
+  function transactionDone(transaction) {
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("Transaction IndexedDB échouée."));
+      transaction.onabort = () => reject(transaction.error || new Error("Transaction IndexedDB annulée."));
+    });
+  }
+
+  async function getAllProjects() {
+    const database = await openDatabase();
+    const transaction = database.transaction(PROJECT_STORE, "readonly");
+    const done = transactionDone(transaction);
+    const request = transaction.objectStore(PROJECT_STORE).getAll();
+    const storedProjects = await requestToPromise(request);
+    await done;
+    return Array.isArray(storedProjects) ? storedProjects.map(normalizeProject) : [];
+  }
+
+  async function getProjectById(id) {
+    const database = await openDatabase();
+    const transaction = database.transaction(PROJECT_STORE, "readonly");
+    const done = transactionDone(transaction);
+    const request = transaction.objectStore(PROJECT_STORE).get(id);
+    const storedProject = await requestToPromise(request);
+    await done;
+    return storedProject ? normalizeProject(storedProject) : null;
+  }
+
+  async function saveProject(project) {
+    const database = await openDatabase();
+    const transaction = database.transaction(PROJECT_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    transaction.objectStore(PROJECT_STORE).put(normalizeProject(project));
+    await done;
+  }
+
+  async function updateProject(project) {
+    await saveProject(project);
+  }
+
+  async function deleteProject(id) {
+    const database = await openDatabase();
+    const transaction = database.transaction(PROJECT_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    transaction.objectStore(PROJECT_STORE).delete(id);
+    await done;
+  }
+
+  async function clearAllProjects() {
+    const database = await openDatabase();
+    const transaction = database.transaction(PROJECT_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    transaction.objectStore(PROJECT_STORE).clear();
+    await done;
+  }
+
+  async function getAllNotes() {
+    const database = await openDatabase();
+    const transaction = database.transaction(NOTE_STORE, "readonly");
+    const done = transactionDone(transaction);
+    const request = transaction.objectStore(NOTE_STORE).getAll();
+    const storedNotes = await requestToPromise(request);
+    await done;
+    return Array.isArray(storedNotes) ? storedNotes.map(normalizeNote) : [];
+  }
+
+  async function saveNoteRecord(note) {
+    const database = await openDatabase();
+    const transaction = database.transaction(NOTE_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    transaction.objectStore(NOTE_STORE).put(normalizeNote(note));
+    await done;
+  }
+
+  async function deleteNoteRecord(id) {
+    const database = await openDatabase();
+    const transaction = database.transaction(NOTE_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    transaction.objectStore(NOTE_STORE).delete(id);
+    await done;
   }
 
   function normalizeProject(project) {
@@ -52,16 +164,6 @@
     };
   }
 
-  function loadNotes() {
-    try {
-      const savedNotes = JSON.parse(localStorage.getItem(NOTES_KEY) || "[]");
-      return Array.isArray(savedNotes) ? savedNotes.map(normalizeNote) : [];
-    } catch (error) {
-      console.warn("Unable to read notes from LocalStorage.", error);
-      return [];
-    }
-  }
-
   function normalizeNote(note) {
     return {
       id: note.id || createId(),
@@ -69,14 +171,6 @@
       content: note.content || "",
       createdAt: note.createdAt || new Date().toISOString(),
     };
-  }
-
-  function saveProjects() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-  }
-
-  function saveNotes() {
-    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
   }
 
   function createId() {
@@ -240,7 +334,24 @@
     return { view: "home" };
   }
 
+  function renderLoadingView(message) {
+    app.innerHTML = `
+      <section class="phone-page home-view">
+        <div class="empty-state">
+          <ion-icon name="sync-outline"></ion-icon>
+          <h2>${escapeHtml(message || "Chargement...")}</h2>
+          <p>Initialisation des donnees locales.</p>
+        </div>
+      </section>
+    `;
+  }
+
   function render() {
+    if (!appReady) {
+      renderLoadingView("Chargement...");
+      return;
+    }
+
     const route = getRoute();
     noteFormVisible = false;
 
@@ -265,6 +376,21 @@
     }
 
     renderHomeView();
+  }
+
+  async function initializeApp() {
+    try {
+      renderLoadingView("Ouverture de la base...");
+      await openDatabase();
+      projects = await getAllProjects();
+      notes = await getAllNotes();
+      appReady = true;
+      render();
+    } catch (error) {
+      console.error("Impossible de charger les donnees IndexedDB.", error);
+      renderLoadingView("Impossible de charger les donnees.");
+      showToast("Erreur IndexedDB.", "danger");
+    }
   }
 
   function renderHomeView() {
@@ -791,7 +917,7 @@
       return;
     }
 
-    projects.unshift({
+    const newProject = {
       id: createId(),
       name,
       description,
@@ -800,9 +926,11 @@
       status: "active",
       parts: buildProjectParts(parts),
       expenses: [],
-    });
+    };
 
-    saveProjects();
+    projects.unshift(newProject);
+
+    await saveProject(newProject);
     showToast("Projet créé.", "success");
     projectSaving = false;
     navigate("home");
@@ -854,7 +982,7 @@
       linkedExpenseIds,
     });
 
-    saveProjects();
+    await updateProject(project);
     expenseModalOpen = false;
     expenseSaving = false;
     showToast("Dépense ajoutée.", "success");
@@ -882,14 +1010,16 @@
       return;
     }
 
-    notes.unshift({
+    const newNote = {
       id: createId(),
       title,
       content,
       createdAt: new Date().toISOString(),
-    });
+    };
 
-    saveNotes();
+    notes.unshift(newNote);
+
+    await saveNoteRecord(newNote);
     noteFormVisible = false;
     noteSaving = false;
     showToast("Note enregistrée.", "success");
@@ -929,7 +1059,7 @@
         text: "Supprimer le projet",
         role: "destructive",
         icon: "trash-outline",
-        handler: () => deleteProject(project.id),
+        handler: () => removeProject(project.id),
       },
       { text: "Annuler", role: "cancel" },
     ];
@@ -972,9 +1102,15 @@
             return false;
           }
 
-          saveProjects();
-          showToast("Partie ajoutée.", "success");
-          renderProjectDetailsView(project.id);
+          updateProject(project)
+            .then(() => {
+              showToast("Partie ajoutée.", "success");
+              renderProjectDetailsView(project.id);
+            })
+            .catch((error) => {
+              console.error("Impossible de sauvegarder la partie.", error);
+              showToast("Erreur lors de la sauvegarde.", "danger");
+            });
         },
       },
     ];
@@ -1010,7 +1146,7 @@
     await alert.present();
   }
 
-  function toggleProjectStatus(projectId) {
+  async function toggleProjectStatus(projectId) {
     const project = projects.find((item) => item.id === projectId);
 
     if (!project) {
@@ -1018,12 +1154,12 @@
     }
 
     project.status = project.status === "completed" ? "active" : "completed";
-    saveProjects();
+    await updateProject(project);
     showToast(project.status === "completed" ? "Projet terminé." : "Projet rouvert.", "success");
     renderProjectDetailsView(project.id);
   }
 
-  async function deleteProject(projectId) {
+  async function removeProject(projectId) {
     const project = projects.find((item) => item.id === projectId);
 
     if (!project) {
@@ -1034,7 +1170,7 @@
 
     if (confirmed) {
       projects = projects.filter((item) => item.id !== projectId);
-      saveProjects();
+      await deleteProject(projectId);
       showToast("Projet supprimé.", "success");
       navigate("home");
     }
@@ -1098,7 +1234,7 @@
 
     if (action === "delete-project") {
       event.stopPropagation();
-      await deleteProject(actionElement.dataset.id);
+      await removeProject(actionElement.dataset.id);
     }
 
     if (action === "project-menu") {
@@ -1139,7 +1275,7 @@
 
       if (confirmed) {
         project.expenses = project.expenses.filter((item) => item.id !== expense.id);
-        saveProjects();
+        await updateProject(project);
         showToast("Dépense supprimée.", "success");
         renderProjectDetailsView(project.id);
       }
@@ -1165,7 +1301,7 @@
 
       if (confirmed) {
         notes = notes.filter((item) => item.id !== note.id);
-        saveNotes();
+        await deleteNoteRecord(note.id);
         showToast("Note supprimée.", "success");
         renderNotesView();
       }
@@ -1187,5 +1323,5 @@
   });
 
   window.addEventListener("hashchange", render);
-  render();
+  initializeApp();
 })();
