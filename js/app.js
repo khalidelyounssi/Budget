@@ -1,311 +1,65 @@
+import {
+  deleteProject as deleteProjectRecord,
+  getAllProjects,
+  getProjectById,
+  getSettings,
+  openDatabase,
+  saveProject,
+  saveSettings,
+  updateProject,
+} from "./db.js";
+import { addExpense, deleteExpense, filterExpenses, getLinkedExpenses } from "./expenses.js";
+import { buildProjectExport } from "./export.js";
+import { addPhase, deletePhase, ensureProjectPhases, renamePhase } from "./phases.js";
+import { createProject, filterProjects, getProgress, getProjectTotal, getRemainingBudget, normalizeProject } from "./projects.js";
+import { applyTheme, DEFAULT_SETTINGS, normalizeSettings } from "./settings.js";
+import { answerProjectQuestion, getAiWelcomeMessage } from "./ai.js";
+import {
+  confirmAction,
+  downloadJson,
+  escapeHtml,
+  formatDate,
+  formatMoney,
+  normalizeName,
+  parseAmount,
+  promptText,
+  showActionSheet,
+  showInfoAlert,
+  showToast,
+} from "./utils.js";
+
 (function () {
   "use strict";
 
-  const DB_NAME = "BudgetManagerDB";
-  const DB_VERSION = 1;
-  const PROJECT_STORE = "projects";
-  const NOTE_STORE = "notes";
   const app = document.getElementById("app");
 
-  let databasePromise = null;
-  let projects = [];
-  let notes = [];
-  let appReady = false;
-  let currentProjectId = null;
-  let projectFilter = "active";
-  let expenseModalOpen = false;
-  let noteFormVisible = false;
-  let expenseSearch = "";
-  let projectSaving = false;
-  let expenseSaving = false;
-  let noteSaving = false;
+  const state = {
+    appReady: false,
+    labels: {},
+    projects: [],
+    settings: { ...DEFAULT_SETTINGS },
+    projectFilter: "active",
+    expenseSearch: "",
+    expenseModalOpen: false,
+    aiModalOpen: false,
+    aiProjectId: "",
+    aiQuestion: "",
+    aiMessages: [],
+    savingProject: false,
+    savingExpense: false,
+  };
 
-  // IndexedDB is the app's only storage layer.
-  // We keep one store for projects and one for notes so the app stays simple.
-  function openDatabase() {
-    if (databasePromise) {
-      return databasePromise;
+  function t(key) {
+    return state.labels[key] || key;
+  }
+
+  async function loadLanguage(languageCode) {
+    const response = await fetch(`langs/${languageCode}.json`);
+    if (!response.ok) {
+      throw new Error(`Unable to load language: ${languageCode}`);
     }
 
-    databasePromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onupgradeneeded = () => {
-        const database = request.result;
-
-        if (!database.objectStoreNames.contains(PROJECT_STORE)) {
-          database.createObjectStore(PROJECT_STORE, { keyPath: "id" });
-        }
-
-        if (!database.objectStoreNames.contains(NOTE_STORE)) {
-          database.createObjectStore(NOTE_STORE, { keyPath: "id" });
-        }
-      };
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Impossible d'ouvrir IndexedDB."));
-    });
-
-    return databasePromise;
-  }
-
-  function requestToPromise(request) {
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Erreur IndexedDB."));
-    });
-  }
-
-  function transactionDone(transaction) {
-    return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error || new Error("Transaction IndexedDB échouée."));
-      transaction.onabort = () => reject(transaction.error || new Error("Transaction IndexedDB annulée."));
-    });
-  }
-
-  async function getAllProjects() {
-    const database = await openDatabase();
-    const transaction = database.transaction(PROJECT_STORE, "readonly");
-    const done = transactionDone(transaction);
-    const request = transaction.objectStore(PROJECT_STORE).getAll();
-    const storedProjects = await requestToPromise(request);
-    await done;
-    return Array.isArray(storedProjects) ? storedProjects.map(normalizeProject) : [];
-  }
-
-  async function getProjectById(id) {
-    const database = await openDatabase();
-    const transaction = database.transaction(PROJECT_STORE, "readonly");
-    const done = transactionDone(transaction);
-    const request = transaction.objectStore(PROJECT_STORE).get(id);
-    const storedProject = await requestToPromise(request);
-    await done;
-    return storedProject ? normalizeProject(storedProject) : null;
-  }
-
-  async function saveProject(project) {
-    const database = await openDatabase();
-    const transaction = database.transaction(PROJECT_STORE, "readwrite");
-    const done = transactionDone(transaction);
-    transaction.objectStore(PROJECT_STORE).put(normalizeProject(project));
-    await done;
-  }
-
-  async function updateProject(project) {
-    await saveProject(project);
-  }
-
-  async function deleteProject(id) {
-    const database = await openDatabase();
-    const transaction = database.transaction(PROJECT_STORE, "readwrite");
-    const done = transactionDone(transaction);
-    transaction.objectStore(PROJECT_STORE).delete(id);
-    await done;
-  }
-
-  async function clearAllProjects() {
-    const database = await openDatabase();
-    const transaction = database.transaction(PROJECT_STORE, "readwrite");
-    const done = transactionDone(transaction);
-    transaction.objectStore(PROJECT_STORE).clear();
-    await done;
-  }
-
-  async function getAllNotes() {
-    const database = await openDatabase();
-    const transaction = database.transaction(NOTE_STORE, "readonly");
-    const done = transactionDone(transaction);
-    const request = transaction.objectStore(NOTE_STORE).getAll();
-    const storedNotes = await requestToPromise(request);
-    await done;
-    return Array.isArray(storedNotes) ? storedNotes.map(normalizeNote) : [];
-  }
-
-  async function saveNoteRecord(note) {
-    const database = await openDatabase();
-    const transaction = database.transaction(NOTE_STORE, "readwrite");
-    const done = transactionDone(transaction);
-    transaction.objectStore(NOTE_STORE).put(normalizeNote(note));
-    await done;
-  }
-
-  async function deleteNoteRecord(id) {
-    const database = await openDatabase();
-    const transaction = database.transaction(NOTE_STORE, "readwrite");
-    const done = transactionDone(transaction);
-    transaction.objectStore(NOTE_STORE).delete(id);
-    await done;
-  }
-
-  function normalizeProject(project) {
-    return {
-      id: project.id || createId(),
-      name: project.name || "Projet sans nom",
-      description: project.description || "",
-      estimatedBudget: parseAmount(project.estimatedBudget),
-      createdAt: project.createdAt || new Date().toISOString(),
-      status: project.status === "completed" ? "completed" : "active",
-      parts: buildProjectParts(project.parts),
-      expenses: Array.isArray(project.expenses) ? project.expenses.map(normalizeExpense) : [],
-    };
-  }
-
-  function normalizeExpense(expense) {
-    return {
-      id: expense.id || createId(),
-      name: expense.name || "Dépense sans nom",
-      amount: parseAmount(expense.amount),
-      date: expense.date || new Date().toISOString().substring(0, 10),
-      supplier: expense.supplier || "",
-      part: expense.part || expense.partId || "",
-      note: expense.note || expense.category || "",
-      linkedExpenseIds: Array.isArray(expense.linkedExpenseIds) ? expense.linkedExpenseIds : [],
-    };
-  }
-
-  function normalizeNote(note) {
-    return {
-      id: note.id || createId(),
-      title: note.title || "Note sans titre",
-      content: note.content || "",
-      createdAt: note.createdAt || new Date().toISOString(),
-    };
-  }
-
-  function createId() {
-    if (window.crypto && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-
-    return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
-
-  function parseAmount(value) {
-    const normalizedValue = String(value || "")
-      .replace(/\s/g, "")
-      .replace(",", ".");
-
-    return Number(normalizedValue) || 0;
-  }
-
-  function formatMoney(amount) {
-    return `${new Intl.NumberFormat("fr-FR", {
-      maximumFractionDigits: 0,
-    }).format(Number(amount) || 0)} DH`;
-  }
-
-  function formatDate(dateValue) {
-    return new Date(dateValue).toLocaleDateString("fr-FR");
-  }
-
-  function getProjectTotal(project) {
-    return project.expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
-  }
-
-  function getRemainingBudget(project) {
-    return Number(project.estimatedBudget || 0) - getProjectTotal(project);
-  }
-
-  function getProgress(project) {
-    if (!project.estimatedBudget) {
-      return 0;
-    }
-
-    return Math.min(Math.round((getProjectTotal(project) / project.estimatedBudget) * 100), 100);
-  }
-
-  function getAllEstimatedBudget() {
-    return projects.reduce((total, project) => total + Number(project.estimatedBudget || 0), 0);
-  }
-
-  function getAllExpensesTotal() {
-    return projects.reduce((total, project) => total + getProjectTotal(project), 0);
-  }
-
-  function escapeHtml(value) {
-    return String(value || "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function normalizePartName(value) {
-    return String(value || "").trim().replace(/\s+/g, " ");
-  }
-
-  function buildProjectParts(parts) {
-    const sourceParts = Array.isArray(parts) ? parts : [];
-    const uniqueParts = [];
-    const seen = new Set();
-
-    ["Général", ...sourceParts].forEach((part) => {
-      const cleanPart = normalizePartName(part);
-      const partKey = cleanPart.toLowerCase();
-
-      if (!cleanPart || seen.has(partKey)) {
-        return;
-      }
-
-      seen.add(partKey);
-      uniqueParts.push(cleanPart);
-    });
-
-    return uniqueParts;
-  }
-
-  function ensureProjectParts(project) {
-    project.parts = buildProjectParts(project.parts);
-    return project.parts;
-  }
-
-  function addProjectPart(project, rawPart) {
-    const newPart = normalizePartName(rawPart);
-
-    if (!newPart) {
-      return { ok: false, reason: "empty" };
-    }
-
-    const currentParts = ensureProjectParts(project);
-    const exists = currentParts.some((part) => part.toLowerCase() === newPart.toLowerCase());
-
-    if (exists) {
-      return { ok: false, reason: "duplicate" };
-    }
-
-    project.parts = [...currentParts, newPart];
-    return { ok: true };
-  }
-
-  function navigate(view, id) {
-    expenseModalOpen = false;
-    expenseSearch = "";
-
-    if (view === "home") {
-      location.hash = "#/";
-      return;
-    }
-
-    if (view === "add") {
-      location.hash = "#/add";
-      return;
-    }
-
-    if (view === "stats") {
-      location.hash = "#/stats";
-      return;
-    }
-
-    if (view === "notes") {
-      location.hash = "#/notes";
-      return;
-    }
-
-    if (view === "details") {
-      location.hash = `#/project/${id}`;
-    }
+    return response.json();
   }
 
   function getRoute() {
@@ -316,46 +70,101 @@
     }
 
     if (hash === "add") {
-      return { view: "add" };
+      return { view: "add-project" };
     }
 
-    if (hash === "stats") {
-      return { view: "stats" };
-    }
-
-    if (hash === "notes") {
-      return { view: "notes" };
+    if (hash === "settings") {
+      return { view: "settings" };
     }
 
     if (hash.startsWith("project/")) {
-      return { view: "details", id: hash.split("/")[1] };
+      const parts = hash.split("/");
+      if (parts[2] === "phases") {
+        return { view: "phases", id: parts[1] };
+      }
+
+      return { view: "details", id: parts[1] };
     }
 
     return { view: "home" };
   }
 
-  function renderLoadingView(message) {
+  function navigate(view, projectId) {
+    state.expenseModalOpen = false;
+    state.aiModalOpen = false;
+    state.expenseSearch = "";
+
+    if (view === "home") {
+      location.hash = "#/";
+      return;
+    }
+
+    if (view === "add-project") {
+      location.hash = "#/add";
+      return;
+    }
+
+    if (view === "settings") {
+      location.hash = "#/settings";
+      return;
+    }
+
+    if (view === "details") {
+      location.hash = `#/project/${projectId}`;
+      return;
+    }
+
+    if (view === "phases") {
+      location.hash = `#/project/${projectId}/phases`;
+    }
+  }
+
+  async function refreshProjects() {
+    state.projects = (await getAllProjects()).map(normalizeProject);
+  }
+
+  async function initializeApp() {
+    try {
+      renderLoadingView();
+      await openDatabase();
+      state.labels = await loadLanguage("fr");
+      state.settings = normalizeSettings(await getSettings());
+      applyTheme(state.settings);
+      await refreshProjects();
+      state.appReady = true;
+      render();
+    } catch (error) {
+      console.error("App initialization failed.", error);
+      renderLoadingView("Erreur de chargement");
+    }
+  }
+
+  function getCurrentProject(projectId) {
+    const routeProjectId = projectId || getRoute().id;
+    return state.projects.find((project) => project.id === routeProjectId) || null;
+  }
+
+  function renderLoadingView(title) {
     app.innerHTML = `
-      <section class="phone-page home-view">
+      <section class="page">
         <div class="empty-state">
           <ion-icon name="sync-outline"></ion-icon>
-          <h2>${escapeHtml(message || "Chargement...")}</h2>
-          <p>Initialisation des donnees locales.</p>
+          <h2>${escapeHtml(title || "Chargement...")}</h2>
+          <p>Initialisation des données locales.</p>
         </div>
       </section>
     `;
   }
 
   function render() {
-    if (!appReady) {
-      renderLoadingView("Chargement...");
+    if (!state.appReady) {
+      renderLoadingView();
       return;
     }
 
     const route = getRoute();
-    noteFormVisible = false;
 
-    if (route.view === "add") {
+    if (route.view === "add-project") {
       renderAddProjectView();
       return;
     }
@@ -365,239 +174,224 @@
       return;
     }
 
-    if (route.view === "stats") {
-      renderStatsView();
+    if (route.view === "phases") {
+      renderPhasesView(route.id);
       return;
     }
 
-    if (route.view === "notes") {
-      renderNotesView();
+    if (route.view === "settings") {
+      renderSettingsView();
       return;
     }
 
     renderHomeView();
   }
 
-  async function initializeApp() {
-    try {
-      renderLoadingView("Ouverture de la base...");
-      await openDatabase();
-      projects = await getAllProjects();
-      notes = await getAllNotes();
-      appReady = true;
-      render();
-    } catch (error) {
-      console.error("Impossible de charger les donnees IndexedDB.", error);
-      renderLoadingView("Impossible de charger les donnees.");
-      showToast("Erreur IndexedDB.", "danger");
-    }
-  }
-
   function renderHomeView() {
-    currentProjectId = null;
-    const filteredProjects = projects.filter((project) => {
-      return projectFilter === "completed" ? project.status === "completed" : project.status !== "completed";
-    });
+    const filteredProjects = filterProjects(state.projects, state.projectFilter);
+    const totalBudget = state.projects.reduce((sum, project) => sum + Number(project.estimatedBudget || 0), 0);
+    const totalSpent = state.projects.reduce((sum, project) => sum + getProjectTotal(project), 0);
 
     app.innerHTML = `
-      <section class="phone-page home-view">
-        <header class="simple-header">
-          <div></div>
-          <button class="icon-button" type="button" aria-label="Menu" data-action="open-main-menu">
+      <section class="page">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">Static App</p>
+            <h1>${escapeHtml(t("appTitle"))}</h1>
+          </div>
+          <button class="circle-button" type="button" aria-label="${escapeHtml(t("settings"))}" data-action="go-settings">
             <ion-icon name="settings-outline"></ion-icon>
           </button>
         </header>
 
-        <div class="segmented-tabs" role="tablist" aria-label="Filtre projets">
-          <button class="${projectFilter === "active" ? "is-active" : ""}" type="button" data-action="set-project-filter" data-filter="active">En cours</button>
-          <button class="${projectFilter === "completed" ? "is-active" : ""}" type="button" data-action="set-project-filter" data-filter="completed">Terminés</button>
+        <div class="segmented-tabs" role="tablist">
+          <button class="${state.projectFilter === "active" ? "active" : ""}" type="button" data-action="set-filter" data-filter="active">${escapeHtml(t("inProgress"))}</button>
+          <button class="${state.projectFilter === "completed" ? "active" : ""}" type="button" data-action="set-filter" data-filter="completed">${escapeHtml(t("completed"))}</button>
         </div>
 
-        <div class="compact-stats">
-          <span>${projects.length} projet(s)</span>
-          <strong>${formatMoney(getAllExpensesTotal())} / ${formatMoney(getAllEstimatedBudget())}</strong>
-        </div>
+        <section class="summary-grid">
+          <article class="summary-card">
+            <span>${escapeHtml(t("projects"))}</span>
+            <strong>${state.projects.length}</strong>
+          </article>
+          <article class="summary-card">
+            <span>${escapeHtml(t("spent"))}</span>
+            <strong>${formatMoney(totalSpent, state.settings.currency)}</strong>
+          </article>
+          <article class="summary-card">
+            <span>${escapeHtml(t("totalBudget"))}</span>
+            <strong>${formatMoney(totalBudget, state.settings.currency)}</strong>
+          </article>
+        </section>
 
-        ${renderProjectRows(filteredProjects)}
+        ${renderProjectList(filteredProjects)}
 
-        <button class="green-fab" type="button" aria-label="Ajouter un projet" data-action="go-add">
+        <button class="fab-button" type="button" aria-label="${escapeHtml(t("addProject"))}" data-action="go-add-project">
           <ion-icon name="add-outline"></ion-icon>
         </button>
       </section>
     `;
   }
 
-  function renderProjectRows(projectList) {
-    if (projectList.length === 0) {
+  function renderProjectList(projects) {
+    if (projects.length === 0) {
       return `
         <div class="empty-state">
           <ion-icon name="folder-open-outline"></ion-icon>
           <h2>Aucun projet</h2>
-          <p>${projectFilter === "completed" ? "Les projets terminés seront affichés ici." : "Cliquez sur + pour créer votre premier projet."}</p>
+          <p>Ajoutez un projet pour commencer le suivi du budget.</p>
         </div>
       `;
     }
 
     return `
-      <div class="row-list">
-        ${projectList
+      <section class="project-list">
+        ${projects
           .map((project) => {
             const total = getProjectTotal(project);
-            const remaining = getRemainingBudget(project);
             const progress = getProgress(project);
-            const progressColor = remaining < 0 ? "#ef4444" : "#6fbd50";
-
+            const remaining = getRemainingBudget(project);
+            const statusClass = project.status === "completed" ? "completed" : "active";
             return `
-              <article class="project-row" data-action="open-project" data-id="${project.id}">
-                <div class="circle-progress" style="--progress:${progress * 3.6}deg; --progress-color:${progressColor}">
-                  <span>${progress}</span>
-                </div>
-                <div class="project-row-copy">
+              <article class="project-card" data-action="open-project" data-id="${project.id}">
+                <div class="project-ring" style="--ring-progress:${progress * 3.6}deg; --ring-color:${remaining < 0 ? "var(--color-danger)" : "var(--color-success)"}"></div>
+                <div class="project-copy">
                   <h2>${escapeHtml(project.name)}</h2>
-                  <p>${formatMoney(total)} / ${formatMoney(project.estimatedBudget)}</p>
+                  <p>${formatMoney(total, state.settings.currency)} / ${formatMoney(project.estimatedBudget, state.settings.currency)}</p>
+                  <div class="project-meta">
+                    <span class="status-badge ${statusClass}">${project.status === "completed" ? escapeHtml(t("completed")) : escapeHtml(t("inProgress"))}</span>
+                    <span class="mini-badge">${project.phases.length} ${escapeHtml(t("phases"))}</span>
+                  </div>
                 </div>
-                <button class="row-delete" type="button" aria-label="Supprimer le projet" data-action="delete-project" data-id="${project.id}">
-                  <ion-icon name="trash-outline"></ion-icon>
+                <button class="card-menu" type="button" aria-label="Projet menu" data-action="project-card-menu" data-id="${project.id}">
+                  <ion-icon name="ellipsis-horizontal-outline"></ion-icon>
                 </button>
-                <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
               </article>
             `;
           })
           .join("")}
-      </div>
+      </section>
     `;
   }
 
   function renderAddProjectView() {
     app.innerHTML = `
-      <section class="phone-page form-view">
-        <header class="title-header">
-          <button class="back-link" type="button" data-action="go-home">
-            <ion-icon name="chevron-back-outline"></ion-icon>
-            Back
+      <section class="page">
+        <header class="subtopbar">
+          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-home">
+            <ion-icon name="arrow-back-outline"></ion-icon>
           </button>
-          <h1>Ajouter un projet</h1>
+          <h1 class="title-center">${escapeHtml(t("addProject"))}</h1>
           <span></span>
         </header>
 
-        <form id="projectForm" class="line-form">
-          <label>
-            <span>Nom du projet</span>
-            <input id="projectName" class="line-control native-input" type="text" autocomplete="off" placeholder="Ex: Projet #1" />
-          </label>
+        <section class="form-card">
+          <form id="project-form" class="line-form">
+            <label>
+              <span>${escapeHtml(t("projectName"))}</span>
+              <input id="project-name" class="line-input" type="text" autocomplete="off" placeholder="Ex: Rénovation" />
+            </label>
 
-          <label>
-            <span>Description</span>
-            <textarea id="projectDescription" class="line-control native-input" rows="2" placeholder="Ex: Travaux, achat matériel..."></textarea>
-          </label>
+            <label>
+              <span>${escapeHtml(t("budget"))}</span>
+              <input id="project-budget" class="line-input" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex: 30000,00" />
+            </label>
 
-          <label>
-            <span>Budget</span>
-            <input id="projectBudget" class="line-control native-input" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex: 3000,00" />
-          </label>
-
-          <label>
-            <span>Parties optionnelles</span>
-            <input id="projectParts" class="line-control native-input" type="text" autocomplete="off" placeholder="Ex: Salon, Cuisine, Transport" />
-          </label>
-
-          <ion-button class="green-button" expand="block" type="submit">Ajouter</ion-button>
-        </form>
+            <ion-button class="primary-button" expand="block" type="submit">${escapeHtml(t("add"))}</ion-button>
+          </form>
+        </section>
       </section>
     `;
   }
 
   function renderProjectDetailsView(projectId) {
-    currentProjectId = projectId;
-    const project = projects.find((item) => item.id === projectId);
+    const project = getCurrentProject(projectId);
 
     if (!project) {
-      showToast("Projet introuvable.", "danger");
       navigate("home");
       return;
     }
 
     const total = getProjectTotal(project);
     const progress = getProgress(project);
-    const filteredExpenses = getVisibleExpenses(project);
+    const remaining = getRemainingBudget(project);
+    const filteredExpenses = filterExpenses(project, state.expenseSearch);
 
     app.innerHTML = `
-      <section class="phone-page details-view">
-        <header class="detail-header">
-          <button class="back-link" type="button" data-action="go-home">
-            <ion-icon name="chevron-back-outline"></ion-icon>
-            Back
+      <section class="page">
+        <header class="subtopbar">
+          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-home">
+            <ion-icon name="arrow-back-outline"></ion-icon>
           </button>
-          <h1>${escapeHtml(project.name)}</h1>
-          <button class="kebab-button" type="button" aria-label="Options du projet" data-action="project-menu" data-id="${project.id}">
-            <ion-icon name="ellipsis-vertical"></ion-icon>
+          <h1 class="title-center detail-title">${escapeHtml(project.name)}</h1>
+          <button class="circle-button" type="button" aria-label="Menu projet" data-action="project-details-menu" data-id="${project.id}">
+            <ion-icon name="ellipsis-vertical-outline"></ion-icon>
           </button>
         </header>
 
-        <section class="budget-strip">
-          <p>${formatMoney(total)} / ${formatMoney(project.estimatedBudget)}</p>
-          <div class="thin-progress" aria-label="Progression du budget">
+        <div class="detail-top-actions">
+          <button class="assistant-launch" type="button" data-action="open-ai" aria-label="${escapeHtml(t("aiAssistant"))}">
+            <span class="assistant-launch-copy">
+              <strong>${escapeHtml(t("aiAssistant"))}</strong>
+              <small>Analyse budgétaire du projet</small>
+            </span>
+            <ion-icon name="sparkles-outline"></ion-icon>
+          </button>
+        </div>
+
+        <section class="panel detail-budget">
+          <div class="detail-budget-top">
+            <strong>${formatMoney(total, state.settings.currency)} / ${formatMoney(project.estimatedBudget, state.settings.currency)}</strong>
+            <span class="remaining-badge ${remaining >= 0 ? "positive" : "negative"}">${escapeHtml(t("remainingBudget"))}: ${formatMoney(Math.abs(remaining), state.settings.currency)}</span>
+          </div>
+          <div class="progress-track">
             <span style="width:${progress}%"></span>
           </div>
-          ${renderRemainingMessage(project)}
         </section>
 
-        ${renderProjectParts(project)}
+        <section class="panel">
+          <div class="section-header">
+            <h2>${escapeHtml(t("projectPhases"))}</h2>
+            <button class="mini-icon-button" type="button" data-action="go-phases" data-id="${project.id}">
+              <ion-icon name="layers-outline"></ion-icon>
+            </button>
+          </div>
+          <div class="phases-wrap">
+            ${ensureProjectPhases(project).map((phase) => `<span class="phase-chip">${escapeHtml(phase)}</span>`).join("")}
+          </div>
+        </section>
 
-        ${expenseSearch ? `<button class="search-chip" type="button" data-action="clear-expense-search">Recherche: ${escapeHtml(expenseSearch)} <ion-icon name="close-outline"></ion-icon></button>` : ""}
+        <div class="section-header">
+          <h2>${escapeHtml(t("expenses"))}</h2>
+          <span class="muted">Suivi détaillé</span>
+        </div>
 
-        ${renderExpenseRows(project, filteredExpenses)}
+        ${state.expenseSearch ? `<button class="search-chip" type="button" data-action="clear-expense-search">${escapeHtml(state.expenseSearch)} <ion-icon name="close-outline"></ion-icon></button>` : ""}
 
-        <button class="green-fab" type="button" aria-label="Ajouter une dépense" data-action="show-expense-modal">
+        ${renderExpenseList(project, filteredExpenses)}
+
+        <button class="fab-button" type="button" aria-label="${escapeHtml(t("addExpense"))}" data-action="open-expense-modal">
           <ion-icon name="add-outline"></ion-icon>
         </button>
 
-        ${expenseModalOpen ? renderExpenseModal(project) : ""}
+        ${state.expenseModalOpen ? renderExpenseModal(project) : ""}
+        ${state.aiModalOpen ? renderAiModal() : ""}
       </section>
     `;
   }
 
-  function renderRemainingMessage(project) {
-    const remaining = getRemainingBudget(project);
-
-    if (remaining > 0) {
-      return `<strong class="success">Il reste ${formatMoney(remaining)}</strong>`;
-    }
-
-    if (remaining === 0) {
-      return `<strong>Budget exactement utilisé</strong>`;
-    }
-
-    return `<strong class="danger">Budget dépassé de ${formatMoney(Math.abs(remaining))}</strong>`;
-  }
-
-  function getVisibleExpenses(project) {
-    if (!expenseSearch) {
-      return project.expenses;
-    }
-
-    const query = expenseSearch.toLowerCase();
-
-    return project.expenses.filter((expense) => {
-      return [expense.name, expense.supplier, expense.part, expense.note]
-        .join(" ")
-        .toLowerCase()
-        .includes(query);
-    });
-  }
-
-  function renderExpenseRows(project, expenseList) {
+  function renderExpenseList(project, expenses) {
     if (project.expenses.length === 0) {
       return `
         <div class="empty-state">
           <ion-icon name="receipt-outline"></ion-icon>
           <h2>Aucune dépense</h2>
-          <p>Cliquez sur + pour ajouter une dépense.</p>
+          <p>Utilisez le bouton + pour ajouter la première dépense.</p>
         </div>
       `;
     }
 
-    if (expenseList.length === 0) {
+    if (expenses.length === 0) {
       return `
         <div class="empty-state">
           <ion-icon name="search-outline"></ion-icon>
@@ -608,26 +402,153 @@
     }
 
     return `
-      <div class="expense-row-list">
-        ${expenseList
-          .map((expense, index) => {
-            const linkedText = expense.linkedExpenseIds.length
-              ? `<small>Liée à ${expense.linkedExpenseIds.length} dépense(s)</small>`
-              : "";
-
+      <section class="expense-list">
+        ${expenses
+          .map((expense) => {
             return `
-              <article class="expense-line">
+              <article class="expense-item">
                 <div>
-                  <h2>${escapeHtml(expense.name || `Dépense #${index + 1}`)}</h2>
-                  <p>${formatDate(expense.date)}${expense.part ? ` · ${escapeHtml(expense.part)}` : ""}</p>
-                  ${expense.supplier ? `<small>${escapeHtml(expense.supplier)}</small>` : ""}
-                  ${linkedText}
+                  <h3>${escapeHtml(expense.name)}</h3>
+                  <p>${formatDate(expense.date)} · ${escapeHtml(expense.phase)}</p>
+                  ${expense.supplier ? `<p>${escapeHtml(expense.supplier)}</p>` : ""}
+                  ${expense.note ? `<p>${escapeHtml(expense.note)}</p>` : ""}
                 </div>
-                <div class="expense-line-side">
-                  <strong>${formatMoney(expense.amount)}</strong>
-                  <button class="row-delete" type="button" aria-label="Supprimer la dépense" data-action="delete-expense" data-id="${expense.id}">
+                <div class="expense-side">
+                  <strong>${formatMoney(expense.amount, state.settings.currency)}</strong>
+                  ${expense.linkedExpenseIds.length ? `
+                    <button class="linked-badge" type="button" data-action="show-linked-expenses" data-id="${expense.id}">
+                      <ion-icon name="link-outline"></ion-icon>
+                      ${escapeHtml(t("linkedExpenses"))}
+                    </button>
+                  ` : ""}
+                  <button class="mini-icon-button danger" type="button" data-action="delete-expense" data-project-id="${project.id}" data-id="${expense.id}">
                     <ion-icon name="trash-outline"></ion-icon>
                   </button>
+                </div>
+              </article>
+            `;
+          })
+          .join("")}
+      </section>
+    `;
+  }
+
+  function renderExpenseModal(project) {
+    const expenses = project.expenses;
+    return `
+      <div class="modal-screen">
+        <button class="modal-backdrop" type="button" data-action="close-expense-modal"></button>
+        <section class="modal-card" data-modal-panel>
+          <div class="modal-header">
+            <h2>${escapeHtml(t("addExpense"))}</h2>
+            <button class="ghost-button" type="button" aria-label="Fermer" data-action="close-expense-modal">
+              <ion-icon name="close-outline"></ion-icon>
+            </button>
+          </div>
+          <form id="expense-form" class="line-form">
+            <label>
+              <span>Nom</span>
+              <input id="expense-name" class="line-input" type="text" autocomplete="off" placeholder="Ex: Peinture" />
+            </label>
+            <label>
+              <span>Montant</span>
+              <input id="expense-amount" class="line-input" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex: 1500,00" />
+            </label>
+            <label>
+              <span>Fournisseur</span>
+              <input id="expense-supplier" class="line-input" type="text" autocomplete="off" placeholder="Ex: Atlas" />
+            </label>
+            <label>
+              <span>Date</span>
+              <input id="expense-date" class="line-input" type="date" value="${new Date().toISOString().substring(0, 10)}" />
+            </label>
+            <label>
+              <span>Phase</span>
+              <select id="expense-phase" class="line-select">
+                ${ensureProjectPhases(project).map((phase) => `<option value="${escapeHtml(phase)}">${escapeHtml(phase)}</option>`).join("")}
+              </select>
+            </label>
+            ${expenses.length ? `
+              <fieldset class="panel">
+                <legend class="eyebrow">${escapeHtml(t("linkedExpenses"))}</legend>
+                ${expenses
+                  .map((expense) => {
+                    return `
+                      <label class="mini-badge">
+                        <input type="checkbox" name="linked-expense" value="${expense.id}" />
+                        <span>${escapeHtml(expense.name)}</span>
+                      </label>
+                    `;
+                  })
+                  .join("")}
+              </fieldset>
+            ` : ""}
+            <label>
+              <span>Note</span>
+              <textarea id="expense-note" class="line-textarea" rows="3" placeholder="Remarque optionnelle"></textarea>
+            </label>
+            <ion-button class="primary-button" expand="block" type="submit">${escapeHtml(t("add"))}</ion-button>
+          </form>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderAiModal() {
+    const project = getCurrentProject();
+
+    return `
+      <div class="modal-screen">
+        <button class="modal-backdrop" type="button" data-action="close-ai-modal"></button>
+        <section class="modal-card large ai-chat-modal" data-modal-panel>
+          <div class="modal-header ai-chat-header">
+            <div>
+              <h2>${escapeHtml(t("aiAssistant"))}</h2>
+              <p class="muted">${project ? `Analyse budgétaire et suivi du projet ${escapeHtml(project.name)}.` : "Analyse budgétaire et suivi du projet."}</p>
+            </div>
+            <button class="ghost-button ai-close-button" type="button" aria-label="Fermer" data-action="close-ai-modal">
+              <ion-icon name="close-outline"></ion-icon>
+            </button>
+          </div>
+          <div class="ai-chat-body">
+            ${renderAiMessages()}
+          </div>
+          <form id="ai-form" class="ai-chat-form">
+            <label class="ai-input-wrap">
+              <span class="eyebrow">Question</span>
+              <textarea id="ai-question" class="line-textarea ai-chat-input" rows="3" placeholder="Ex: Quel est le budget restant ?">${escapeHtml(state.aiQuestion)}</textarea>
+            </label>
+            <ion-button class="primary-button" expand="block" type="submit">Envoyer</ion-button>
+          </form>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderAiMessages() {
+    const messages = state.aiMessages.length
+      ? state.aiMessages
+      : [
+          { role: "assistant", ...getAiWelcomeMessage(getCurrentProject(), state.settings.currency) },
+        ];
+
+    return `
+      <div class="ai-messages">
+        ${messages
+          .map((message) => {
+            return `
+              <article class="ai-message ai-message-${message.role}">
+                <div class="ai-bubble-group">
+                  <div class="ai-bubble">${escapeHtml(message.text)}</div>
+                  ${message.options && message.options.length ? `
+                    <div class="ai-option-list">
+                      ${message.options
+                        .map((option) => {
+                          return `<button class="ai-option-chip" type="button" data-action="ai-suggestion" data-query="${escapeHtml(option.query)}">${escapeHtml(option.label)}</button>`;
+                        })
+                        .join("")}
+                    </div>
+                  ` : ""}
                 </div>
               </article>
             `;
@@ -637,557 +558,482 @@
     `;
   }
 
-  function renderExpenseModal(project) {
-    const today = new Date().toISOString().substring(0, 10);
-    const parts = ensureProjectParts(project);
+  function renderPhasesView(projectId) {
+    const project = getCurrentProject(projectId);
 
-    return `
-      <div class="modal-screen" data-modal-root>
-        <button class="modal-backdrop" type="button" aria-label="Fermer la fenêtre" data-action="close-expense-modal"></button>
-        <section class="expense-modal" role="dialog" aria-modal="true" aria-label="Ajouter une dépense" data-modal-panel>
-          <header class="modal-header">
-            <h2>Ajouter une dépense</h2>
-            <button type="button" aria-label="Fermer" data-action="close-expense-modal">
-              <ion-icon name="close-outline"></ion-icon>
-            </button>
-          </header>
-
-          <form id="expenseForm" class="line-form modal-form">
-            <label>
-              <span>Nom de la dépense</span>
-              <input id="expenseName" class="line-control native-input" type="text" autocomplete="off" placeholder="Ex: Peinture" />
-            </label>
-
-            <label>
-              <span>Montant</span>
-              <input id="expenseAmount" class="line-control native-input" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex: 1000,00" />
-            </label>
-
-            <label>
-              <span>Fournisseur</span>
-              <input id="expenseSupplier" class="line-control native-input" type="text" autocomplete="off" placeholder="Ex: Magasin Atlas" />
-            </label>
-
-            <label>
-              <span>Date</span>
-              <input id="expenseDate" class="line-control native-input" type="date" value="${today}" />
-            </label>
-
-            <label>
-              <span>Partie</span>
-              <select id="expensePart" class="native-select">
-                ${parts.map((part) => `<option value="${escapeHtml(part)}">${escapeHtml(part)}</option>`).join("")}
-              </select>
-            </label>
-
-            ${renderLinkedExpenseChoices(project)}
-
-            <label>
-              <span>Note</span>
-              <textarea id="expenseNote" class="line-control native-input" rows="2" placeholder="Remarque optionnelle"></textarea>
-            </label>
-
-            <ion-button class="green-button" expand="block" type="submit">Ajouter</ion-button>
-          </form>
-        </section>
-      </div>
-    `;
-  }
-
-  function renderLinkedExpenseChoices(project) {
-    if (project.expenses.length === 0) {
-      return "";
-    }
-
-    return `
-      <fieldset class="link-fieldset">
-        <legend>Lier à une dépense</legend>
-        ${project.expenses
-          .map(
-            (expense) => `
-              <label class="check-row">
-                <input type="checkbox" name="linkedExpense" value="${expense.id}" />
-                <span>${escapeHtml(expense.name)} · ${formatMoney(expense.amount)}</span>
-              </label>
-            `
-          )
-          .join("")}
-      </fieldset>
-    `;
-  }
-
-  function renderProjectParts(project) {
-    const parts = ensureProjectParts(project);
-
-    return `
-      <section class="parts-panel">
-        <div class="parts-panel-header">
-          <h2>Parties du projet</h2>
-          <button class="parts-add-button" type="button" data-action="manage-parts" data-id="${project.id}">
-            <ion-icon name="add-outline"></ion-icon>
-            Ajouter
-          </button>
-        </div>
-        <div class="parts-list">
-          ${parts.map((part) => `<span class="part-chip">${escapeHtml(part)}</span>`).join("")}
-        </div>
-      </section>
-    `;
-  }
-
-  function renderStatsView() {
-    currentProjectId = null;
-    const totalBudget = getAllEstimatedBudget();
-    const totalSpent = getAllExpensesTotal();
-    const completedProjects = projects.filter((project) => project.status === "completed").length;
-
-    app.innerHTML = `
-      <section class="phone-page stats-view">
-        <header class="title-header">
-          <button class="back-link" type="button" data-action="go-home">
-            <ion-icon name="chevron-back-outline"></ion-icon>
-            Back
-          </button>
-          <h1>Statistiques</h1>
-          <span></span>
-        </header>
-
-        <div class="stats-cards">
-          <div><span>Projets</span><strong>${projects.length}</strong></div>
-          <div><span>Terminés</span><strong>${completedProjects}</strong></div>
-          <div><span>Budget</span><strong>${formatMoney(totalBudget)}</strong></div>
-          <div><span>Dépensé</span><strong>${formatMoney(totalSpent)}</strong></div>
-        </div>
-      </section>
-    `;
-  }
-
-  function renderNotesView() {
-    currentProjectId = null;
-    const sortedNotes = [...notes].sort((firstNote, secondNote) => {
-      return new Date(secondNote.createdAt).getTime() - new Date(firstNote.createdAt).getTime();
-    });
-
-    app.innerHTML = `
-      <section class="phone-page notes-view">
-        <header class="title-header">
-          <button class="back-link" type="button" data-action="go-home">
-            <ion-icon name="chevron-back-outline"></ion-icon>
-            Back
-          </button>
-          <h1>Notes</h1>
-          <button class="icon-button" type="button" data-action="show-note-form" aria-label="Nouvelle note">
-            <ion-icon name="add-outline"></ion-icon>
-          </button>
-        </header>
-
-        <div id="noteFormSlot"></div>
-
-        ${sortedNotes.length === 0
-          ? `<div class="empty-state"><ion-icon name="chatbubble-ellipses-outline"></ion-icon><h2>Aucune note</h2><p>Cliquez sur + pour écrire une note.</p></div>`
-          : `<div class="note-list">${sortedNotes.map(renderNoteRow).join("")}</div>`}
-      </section>
-    `;
-
-    if (noteFormVisible) {
-      showNoteForm();
-    }
-  }
-
-  function renderNoteRow(note) {
-    return `
-      <article class="note-row">
-        <div>
-          <h2>${escapeHtml(note.title)}</h2>
-          <p>${formatDate(note.createdAt)}</p>
-          <small>${escapeHtml(note.content)}</small>
-        </div>
-        <button class="row-delete" type="button" aria-label="Supprimer la note" data-action="delete-note" data-id="${note.id}">
-          <ion-icon name="trash-outline"></ion-icon>
-        </button>
-      </article>
-    `;
-  }
-
-  function renderNoteForm() {
-    return `
-      <form id="noteForm" class="line-form note-form">
-        <label>
-          <span>Titre</span>
-          <input id="noteTitle" class="line-control native-input" type="text" autocomplete="off" placeholder="Ex: Achat matériel" />
-        </label>
-        <label>
-          <span>Votre note</span>
-          <textarea id="noteContent" class="line-control native-input" rows="4" placeholder="Écrivez votre note..."></textarea>
-        </label>
-        <ion-button class="green-button" expand="block" type="submit">Enregistrer</ion-button>
-        <ion-button fill="clear" expand="block" type="button" data-action="hide-note-form">Annuler</ion-button>
-      </form>
-    `;
-  }
-
-  function showNoteForm() {
-    noteFormVisible = true;
-    const slot = document.getElementById("noteFormSlot");
-
-    if (slot) {
-      slot.innerHTML = renderNoteForm();
-      setTimeout(() => document.getElementById("noteTitle")?.focus(), 100);
-    }
-  }
-
-  function hideNoteForm() {
-    noteFormVisible = false;
-    const slot = document.getElementById("noteFormSlot");
-
-    if (slot) {
-      slot.innerHTML = "";
-    }
-  }
-
-  async function showToast(message, color) {
-    const toast = document.createElement("ion-toast");
-    toast.message = message;
-    toast.duration = 1500;
-    toast.color = color || "primary";
-    document.body.appendChild(toast);
-    await toast.present();
-  }
-
-  async function confirmAction(header, message, confirmText) {
-    return new Promise((resolve) => {
-      const alert = document.createElement("ion-alert");
-      alert.header = header;
-      alert.message = message;
-      alert.buttons = [
-        {
-          text: "Annuler",
-          role: "cancel",
-          handler: () => resolve(false),
-        },
-        {
-          text: confirmText || "Supprimer",
-          role: "destructive",
-          handler: () => resolve(true),
-        },
-      ];
-      document.body.appendChild(alert);
-      alert.present();
-    });
-  }
-
-  async function getIonValue(selector) {
-    const element = document.querySelector(selector);
-
-    if (!element) {
-      return "";
-    }
-
-    if (typeof element.getInputElement === "function") {
-      const input = await element.getInputElement();
-      return input.value || "";
-    }
-
-    return element.value || "";
-  }
-
-  async function handleProjectFormSubmit(event) {
-    event.preventDefault();
-
-    if (projectSaving) {
+    if (!project) {
+      navigate("home");
       return;
     }
 
-    projectSaving = true;
-    const submitButton = event.target.querySelector('ion-button[type="submit"]');
-    submitButton.disabled = true;
+    const phases = ensureProjectPhases(project);
 
-    const name = (await getIonValue("#projectName")).trim();
-    const description = (await getIonValue("#projectDescription")).trim();
-    const estimatedBudget = parseAmount(await getIonValue("#projectBudget"));
-    const parts = (await getIonValue("#projectParts"))
-      .split(",")
-      .map((part) => part.trim())
-      .filter(Boolean);
+    app.innerHTML = `
+      <section class="page">
+        <header class="subtopbar">
+          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-details" data-id="${project.id}">
+            <ion-icon name="arrow-back-outline"></ion-icon>
+          </button>
+          <h1 class="title-center">${escapeHtml(t("projectPhases"))}</h1>
+          <button class="circle-button" type="button" aria-label="${escapeHtml(t("addPhase"))}" data-action="add-phase" data-id="${project.id}">
+            <ion-icon name="add-outline"></ion-icon>
+          </button>
+        </header>
+
+        <section class="phase-list">
+          ${phases
+            .map((phase) => {
+              return `
+                <article class="phase-item">
+                  <div>
+                    <h3>${escapeHtml(phase)}</h3>
+                    <p class="muted">${project.expenses.filter((expense) => expense.phase === phase).length} dépense(s)</p>
+                  </div>
+                  <div class="phase-actions">
+                    <button class="mini-icon-button" type="button" data-action="edit-phase" data-id="${project.id}" data-phase="${escapeHtml(phase)}">
+                      <ion-icon name="create-outline"></ion-icon>
+                    </button>
+                    <button class="mini-icon-button danger" type="button" data-action="delete-phase" data-id="${project.id}" data-phase="${escapeHtml(phase)}">
+                      <ion-icon name="trash-outline"></ion-icon>
+                    </button>
+                  </div>
+                </article>
+              `;
+            })
+            .join("")}
+        </section>
+      </section>
+    `;
+  }
+
+  function renderSettingsView() {
+    app.innerHTML = `
+      <section class="page">
+        <header class="subtopbar">
+          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-home">
+            <ion-icon name="arrow-back-outline"></ion-icon>
+          </button>
+          <h1 class="title-center">${escapeHtml(t("settings"))}</h1>
+          <span></span>
+        </header>
+
+        <section class="settings-list">
+          <article class="settings-item panel">
+            <div>
+              <h2>${escapeHtml(t("currency"))}</h2>
+              <p class="muted">${escapeHtml(t("settingsDescription"))}</p>
+            </div>
+            <div class="currency-options">
+              ${["DH", "EUR", "$", "GBP"]
+                .map((currency) => {
+                  return `<button class="currency-button ${state.settings.currency === currency ? "active" : ""}" type="button" data-action="set-currency" data-currency="${currency}">${currency}</button>`;
+                })
+                .join("")}
+            </div>
+          </article>
+
+          <article class="settings-item panel">
+            <div>
+              <h2>${escapeHtml(t("darkMode"))}</h2>
+              <p class="muted">Activer ou désactiver le thème sombre.</p>
+            </div>
+            <ion-toggle ${state.settings.darkMode ? "checked" : ""} data-action="toggle-dark-mode"></ion-toggle>
+          </article>
+        </section>
+      </section>
+    `;
+  }
+
+  async function persistProject(project) {
+    const normalizedProject = normalizeProject(project);
+    const existingIndex = state.projects.findIndex((item) => item.id === normalizedProject.id);
+
+    if (existingIndex >= 0) {
+      state.projects.splice(existingIndex, 1, normalizedProject);
+    } else {
+      state.projects.unshift(normalizedProject);
+    }
+
+    await updateProject(normalizedProject);
+  }
+
+  async function handleProjectSubmit(event) {
+    event.preventDefault();
+
+    if (state.savingProject) {
+      return;
+    }
+
+    state.savingProject = true;
+    const name = normalizeName(document.getElementById("project-name")?.value);
+    const estimatedBudget = parseAmount(document.getElementById("project-budget")?.value);
 
     if (!name || estimatedBudget <= 0) {
-      submitButton.disabled = false;
-      projectSaving = false;
+      state.savingProject = false;
       showToast("Ajoutez un nom et un budget positif.", "warning");
       return;
     }
 
-    const newProject = {
-      id: createId(),
-      name,
-      description,
-      estimatedBudget,
-      createdAt: new Date().toISOString(),
-      status: "active",
-      parts: buildProjectParts(parts),
-      expenses: [],
-    };
-
-    projects.unshift(newProject);
-
-    await saveProject(newProject);
+    const project = createProject(name, estimatedBudget);
+    state.projects.unshift(project);
+    await saveProject(project);
+    state.savingProject = false;
     showToast("Projet créé.", "success");
-    projectSaving = false;
     navigate("home");
   }
 
-  async function handleExpenseFormSubmit(event) {
+  async function handleExpenseSubmit(event) {
     event.preventDefault();
 
-    if (expenseSaving) {
+    if (state.savingExpense) {
       return;
     }
 
-    expenseSaving = true;
-    const project = projects.find((item) => item.id === currentProjectId);
-
+    const project = getCurrentProject();
     if (!project) {
-      expenseSaving = false;
-      showToast("Projet introuvable.", "danger");
-      navigate("home");
       return;
     }
 
-    const submitButton = event.target.querySelector('ion-button[type="submit"]');
-    submitButton.disabled = true;
+    state.savingExpense = true;
 
-    const name = (await getIonValue("#expenseName")).trim();
-    const amount = parseAmount(await getIonValue("#expenseAmount"));
-    const supplier = (await getIonValue("#expenseSupplier")).trim();
-    const date = await getIonValue("#expenseDate");
-    const part = document.getElementById("expensePart")?.value || "";
-    const note = (await getIonValue("#expenseNote")).trim();
-    const linkedExpenseIds = [...document.querySelectorAll('input[name="linkedExpense"]:checked')].map((input) => input.value);
+    const name = normalizeName(document.getElementById("expense-name")?.value);
+    const amount = parseAmount(document.getElementById("expense-amount")?.value);
+    const supplier = normalizeName(document.getElementById("expense-supplier")?.value);
+    const date = document.getElementById("expense-date")?.value || "";
+    const phase = document.getElementById("expense-phase")?.value || "Général";
+    const note = normalizeName(document.getElementById("expense-note")?.value);
+    const linkedExpenseIds = [...document.querySelectorAll('input[name="linked-expense"]:checked')].map((input) => input.value);
 
     if (!name || amount <= 0 || !date) {
-      submitButton.disabled = false;
-      expenseSaving = false;
+      state.savingExpense = false;
       showToast("Complétez le nom, le montant positif et la date.", "warning");
       return;
     }
 
-    project.expenses.unshift({
-      id: createId(),
+    addExpense(project, {
       name,
       amount,
       supplier,
       date,
-      part,
+      phase,
       note,
       linkedExpenseIds,
     });
 
-    await updateProject(project);
-    expenseModalOpen = false;
-    expenseSaving = false;
+    await persistProject(project);
+    state.expenseModalOpen = false;
+    state.savingExpense = false;
     showToast("Dépense ajoutée.", "success");
     renderProjectDetailsView(project.id);
   }
 
-  async function handleNoteFormSubmit(event) {
+  async function handleAiSubmit(event) {
     event.preventDefault();
-
-    if (noteSaving) {
-      return;
-    }
-
-    noteSaving = true;
-    const submitButton = event.target.querySelector('ion-button[type="submit"]');
-    submitButton.disabled = true;
-
-    const title = (await getIonValue("#noteTitle")).trim() || "Note sans titre";
-    const content = (await getIonValue("#noteContent")).trim();
-
-    if (!content) {
-      submitButton.disabled = false;
-      noteSaving = false;
-      showToast("Écrivez le contenu de la note.", "warning");
-      return;
-    }
-
-    const newNote = {
-      id: createId(),
-      title,
-      content,
-      createdAt: new Date().toISOString(),
-    };
-
-    notes.unshift(newNote);
-
-    await saveNoteRecord(newNote);
-    noteFormVisible = false;
-    noteSaving = false;
-    showToast("Note enregistrée.", "success");
-    renderNotesView();
+    const question = (document.getElementById("ai-question")?.value || "").trim();
+    await handleAiQuestion(question);
   }
 
-  async function showMainMenu() {
-    const sheet = document.createElement("ion-action-sheet");
-    sheet.header = "Menu";
-    sheet.buttons = [
-      { text: "Statistiques", icon: "analytics-outline", handler: () => navigate("stats") },
-      { text: "Notes", icon: "chatbubble-ellipses-outline", handler: () => navigate("notes") },
-      { text: "Annuler", role: "cancel" },
-    ];
-    document.body.appendChild(sheet);
-    await sheet.present();
-  }
-
-  async function showProjectMenu(projectId) {
-    const project = projects.find((item) => item.id === projectId);
+  async function handleAiQuestion(question, visibleText) {
+    const project = getCurrentProject();
 
     if (!project) {
       return;
     }
 
-    const sheet = document.createElement("ion-action-sheet");
-    sheet.header = project.name;
-    sheet.buttons = [
-      { text: "Gérer les parties", icon: "layers-outline", handler: () => editProjectParts(project.id) },
-      { text: "Rechercher une dépense", icon: "search-outline", handler: () => promptExpenseSearch(project.id) },
-      {
-        text: project.status === "completed" ? "Rouvrir le projet" : "Terminer le projet",
-        icon: "checkmark-circle-outline",
-        handler: () => toggleProjectStatus(project.id),
-      },
-      {
-        text: "Supprimer le projet",
-        role: "destructive",
-        icon: "trash-outline",
-        handler: () => removeProject(project.id),
-      },
-      { text: "Annuler", role: "cancel" },
-    ];
-    document.body.appendChild(sheet);
-    await sheet.present();
-  }
+    state.aiQuestion = String(question || "").trim();
 
-  async function editProjectParts(projectId) {
-    const project = projects.find((item) => item.id === projectId);
-
-    if (!project) {
+    if (!state.aiQuestion) {
+      showToast("Écrivez une question pour l'assistant.", "warning");
       return;
     }
 
-    const currentParts = ensureProjectParts(project);
-    const alert = document.createElement("ion-alert");
-    alert.header = "Parties du projet";
-    alert.subHeader = currentParts.join(" • ");
-    alert.inputs = [
-      {
-        name: "part",
-        type: "text",
-        placeholder: "Ex: Électricité",
-      },
+    const answer = answerProjectQuestion(project, state.aiQuestion, state.settings.currency);
+    state.aiMessages = [
+      ...state.aiMessages,
+      { role: "user", text: visibleText || state.aiQuestion },
+      { role: "assistant", text: answer.text, options: answer.options || [] },
     ];
-    alert.buttons = [
-      { text: "Annuler", role: "cancel" },
-      {
-        text: "Ajouter",
-        handler: (data) => {
-          const result = addProjectPart(project, data.part);
-
-          if (result.reason === "empty") {
-            showToast("Le nom de la partie est obligatoire.", "warning");
-            return false;
-          }
-
-          if (result.reason === "duplicate") {
-            showToast("Cette partie existe déjà.", "warning");
-            return false;
-          }
-
-          updateProject(project)
-            .then(() => {
-              showToast("Partie ajoutée.", "success");
-              renderProjectDetailsView(project.id);
-            })
-            .catch((error) => {
-              console.error("Impossible de sauvegarder la partie.", error);
-              showToast("Erreur lors de la sauvegarde.", "danger");
-            });
-        },
-      },
-    ];
-    document.body.appendChild(alert);
-    await alert.present();
-  }
-
-  async function promptExpenseSearch(projectId) {
-    const alert = document.createElement("ion-alert");
-    alert.header = "Rechercher";
-    alert.inputs = [
-      {
-        name: "query",
-        type: "text",
-        value: expenseSearch,
-        placeholder: "Nom, fournisseur, partie...",
-      },
-    ];
-    alert.buttons = [
-      {
-        text: "Annuler",
-        role: "cancel",
-      },
-      {
-        text: "Chercher",
-        handler: (data) => {
-          expenseSearch = String(data.query || "").trim();
-          renderProjectDetailsView(projectId);
-        },
-      },
-    ];
-    document.body.appendChild(alert);
-    await alert.present();
-  }
-
-  async function toggleProjectStatus(projectId) {
-    const project = projects.find((item) => item.id === projectId);
-
-    if (!project) {
-      return;
-    }
-
-    project.status = project.status === "completed" ? "active" : "completed";
-    await updateProject(project);
-    showToast(project.status === "completed" ? "Projet terminé." : "Projet rouvert.", "success");
+    state.aiQuestion = "";
     renderProjectDetailsView(project.id);
   }
 
-  async function removeProject(projectId) {
-    const project = projects.find((item) => item.id === projectId);
-
+  async function openProjectActions(projectId) {
+    const project = state.projects.find((item) => item.id === projectId);
     if (!project) {
       return;
     }
 
-    const confirmed = await confirmAction("Supprimer le projet", `Voulez-vous supprimer "${escapeHtml(project.name)}" ?`);
+    await showActionSheet(project.name, [
+      { text: "Ouvrir", icon: "open-outline", handler: () => navigate("details", project.id) },
+      { text: t("projectPhases"), icon: "layers-outline", handler: () => navigate("phases", project.id) },
+      {
+        text: project.status === "completed" ? t("inProgress") : t("completed"),
+        icon: "checkmark-circle-outline",
+        handler: async () => {
+          project.status = project.status === "completed" ? "active" : "completed";
+          await persistProject(project);
+          render();
+        },
+      },
+      { text: t("exportJson"), icon: "download-outline", handler: () => exportCurrentProject(project.id) },
+      {
+        text: "Supprimer",
+        role: "destructive",
+        icon: "trash-outline",
+        handler: async () => {
+          const confirmed = await confirmAction("Supprimer le projet", `Supprimer "${project.name}" ?`);
+          if (!confirmed) {
+            return;
+          }
+          state.projects = state.projects.filter((item) => item.id !== project.id);
+          await deleteProjectRecord(project.id);
+          render();
+        },
+      },
+    ]);
+  }
 
-    if (confirmed) {
-      projects = projects.filter((item) => item.id !== projectId);
-      await deleteProject(projectId);
-      showToast("Projet supprimé.", "success");
-      navigate("home");
+  async function openDetailsActions(projectId) {
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project) {
+      return;
     }
+
+    await showActionSheet(project.name, [
+      { text: t("projectPhases"), icon: "layers-outline", handler: () => navigate("phases", project.id) },
+      {
+        text: "Rechercher une dépense",
+        icon: "search-outline",
+        handler: async () => {
+          const query = await promptText({
+            header: "Recherche",
+            value: state.expenseSearch,
+            placeholder: "Nom, fournisseur, phase...",
+            confirmText: "Chercher",
+          });
+
+          if (query === null) {
+            return;
+          }
+
+          state.expenseSearch = normalizeName(query);
+          renderProjectDetailsView(project.id);
+        },
+      },
+      { text: t("exportJson"), icon: "download-outline", handler: () => exportCurrentProject(project.id) },
+      { text: t("aiAssistant"), icon: "sparkles-outline", handler: () => openAiModal(project.id) },
+      {
+        text: project.status === "completed" ? t("inProgress") : t("completed"),
+        icon: "checkmark-circle-outline",
+        handler: async () => {
+          project.status = project.status === "completed" ? "active" : "completed";
+          await persistProject(project);
+          renderProjectDetailsView(project.id);
+        },
+      },
+      {
+        text: "Supprimer",
+        role: "destructive",
+        icon: "trash-outline",
+        handler: async () => {
+          const confirmed = await confirmAction("Supprimer le projet", `Supprimer "${project.name}" ?`);
+          if (!confirmed) {
+            return;
+          }
+          state.projects = state.projects.filter((item) => item.id !== project.id);
+          await deleteProjectRecord(project.id);
+          navigate("home");
+        },
+      },
+    ]);
+  }
+
+  async function openAiModal(projectId) {
+    const project = getCurrentProject(projectId);
+    if (!project) {
+      return;
+    }
+
+    if (state.aiProjectId !== project.id) {
+      state.aiProjectId = project.id;
+      state.aiMessages = [];
+    }
+
+    state.aiModalOpen = true;
+    state.aiQuestion = "";
+    if (!state.aiMessages.length) {
+      state.aiMessages = [{ role: "assistant", ...getAiWelcomeMessage(project, state.settings.currency) }];
+    }
+    renderProjectDetailsView(project.id);
+  }
+
+  function exportCurrentProject(projectId) {
+    const project = getCurrentProject(projectId);
+    if (!project) {
+      return;
+    }
+
+    const data = buildProjectExport(project, state.settings.currency);
+    downloadJson(`${project.name.replace(/\s+/g, "-").toLowerCase()}-budget.json`, data);
+  }
+
+  async function handleAddPhase(projectId) {
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return;
+    }
+
+    const value = await promptText({
+      header: t("addPhase"),
+      subHeader: ensureProjectPhases(project).join(" • "),
+      placeholder: "Ex: Électricité",
+      confirmText: t("add"),
+    });
+
+    if (value === null) {
+      return;
+    }
+
+    const result = addPhase(project, value);
+    if (result.reason === "empty") {
+      showToast("Le nom de la phase est obligatoire.", "warning");
+      return;
+    }
+
+    if (result.reason === "duplicate") {
+      showToast("Cette phase existe déjà.", "warning");
+      return;
+    }
+
+    await persistProject(project);
+    renderPhasesView(project.id);
+  }
+
+  async function handleEditPhase(projectId, phaseName) {
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return;
+    }
+
+    const value = await promptText({
+      header: t("editPhase"),
+      value: phaseName,
+      placeholder: "Ex: Électricité",
+      confirmText: "Enregistrer",
+    });
+
+    if (value === null) {
+      return;
+    }
+
+    const result = renamePhase(project, phaseName, value);
+    if (result.reason === "empty") {
+      showToast("Le nom de la phase est obligatoire.", "warning");
+      return;
+    }
+
+    if (result.reason === "duplicate") {
+      showToast("Cette phase existe déjà.", "warning");
+      return;
+    }
+
+    if (result.reason === "protected") {
+      showToast("La phase Général ne peut pas être renommée.", "warning");
+      return;
+    }
+
+    await persistProject(project);
+    renderPhasesView(project.id);
+  }
+
+  async function handleDeletePhase(projectId, phaseName) {
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return;
+    }
+
+    const confirmed = await confirmAction(
+      t("deletePhase"),
+      phaseName === "Général"
+        ? "La phase Général ne peut pas être supprimée."
+        : `Les dépenses de "${phaseName}" seront déplacées vers Général.`,
+      "Confirmer"
+    );
+
+    if (!confirmed || phaseName === "Général") {
+      return;
+    }
+
+    deletePhase(project, phaseName);
+    await persistProject(project);
+    renderPhasesView(project.id);
+  }
+
+  async function handleDeleteExpense(projectId, expenseId) {
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return;
+    }
+
+    const expense = project.expenses.find((item) => item.id === expenseId);
+    if (!expense) {
+      return;
+    }
+
+    const confirmed = await confirmAction("Supprimer la dépense", `Supprimer "${expense.name}" ?`);
+    if (!confirmed) {
+      return;
+    }
+
+    deleteExpense(project, expenseId);
+    await persistProject(project);
+    renderProjectDetailsView(project.id);
+  }
+
+  async function handleShowLinkedExpenses(projectId, expenseId) {
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return;
+    }
+
+    const expense = project.expenses.find((item) => item.id === expenseId);
+    if (!expense) {
+      return;
+    }
+
+    const linkedExpenses = getLinkedExpenses(project, expense);
+    const message = linkedExpenses.length
+      ? linkedExpenses.map((item) => `${item.name} • ${formatMoney(item.amount, state.settings.currency)}`).join("<br>")
+      : "Aucune dépense liée.";
+
+    await showInfoAlert(t("linkedExpenses"), message);
+  }
+
+  async function handleSettingsUpdate(type, value) {
+    if (type === "currency") {
+      state.settings.currency = value;
+    }
+
+    if (type === "darkMode") {
+      state.settings.darkMode = Boolean(value);
+    }
+
+    state.settings = normalizeSettings(state.settings);
+    applyTheme(state.settings);
+    await saveSettings(state.settings);
+    renderSettingsView();
   }
 
   app.addEventListener("click", async (event) => {
-    const modalPanel = event.target.closest("[data-modal-panel]");
     const actionElement = event.target.closest("[data-action]");
+    const modalPanel = event.target.closest("[data-modal-panel]");
     const formElement = event.target.closest("form");
 
-    // Les clics dans le contenu du modal restent dans le modal.
     if (modalPanel && !actionElement) {
       event.stopPropagation();
       return;
     }
 
-    // Les clics dans un formulaire ne doivent pas déclencher la navigation globale.
     if (formElement && !actionElement) {
       event.stopPropagation();
       return;
@@ -1203,24 +1049,24 @@
       navigate("home");
     }
 
-    if (action === "go-add") {
-      navigate("add");
+    if (action === "go-settings") {
+      navigate("settings");
     }
 
-    if (action === "go-stats") {
-      navigate("stats");
+    if (action === "go-add-project") {
+      navigate("add-project");
     }
 
-    if (action === "go-notes") {
-      navigate("notes");
+    if (action === "go-details") {
+      navigate("details", actionElement.dataset.id);
     }
 
-    if (action === "open-main-menu") {
-      showMainMenu();
+    if (action === "go-phases") {
+      navigate("phases", actionElement.dataset.id);
     }
 
-    if (action === "set-project-filter") {
-      projectFilter = actionElement.dataset.filter || "active";
+    if (action === "set-filter") {
+      state.projectFilter = actionElement.dataset.filter || "active";
       renderHomeView();
     }
 
@@ -1228,97 +1074,90 @@
       navigate("details", actionElement.dataset.id);
     }
 
-    if (action === "manage-parts") {
-      editProjectParts(actionElement.dataset.id);
-    }
-
-    if (action === "delete-project") {
+    if (action === "project-card-menu") {
       event.stopPropagation();
-      await removeProject(actionElement.dataset.id);
+      openProjectActions(actionElement.dataset.id);
     }
 
-    if (action === "project-menu") {
-      showProjectMenu(actionElement.dataset.id);
+    if (action === "project-details-menu") {
+      openDetailsActions(actionElement.dataset.id);
     }
 
-    if (action === "clear-expense-search") {
-      expenseSearch = "";
-      renderProjectDetailsView(currentProjectId);
+    if (action === "manage-parts" || action === "add-phase") {
+      handleAddPhase(actionElement.dataset.id);
     }
 
-    if (action === "show-expense-modal") {
-      expenseModalOpen = true;
-      renderProjectDetailsView(currentProjectId);
-      setTimeout(() => document.getElementById("expenseName")?.focus(), 100);
+    if (action === "edit-phase") {
+      handleEditPhase(actionElement.dataset.id, actionElement.dataset.phase);
+    }
+
+    if (action === "delete-phase") {
+      handleDeletePhase(actionElement.dataset.id, actionElement.dataset.phase);
+    }
+
+    if (action === "open-expense-modal") {
+      state.expenseModalOpen = true;
+      renderProjectDetailsView(getCurrentProject()?.id);
+      setTimeout(() => document.getElementById("expense-name")?.focus(), 80);
     }
 
     if (action === "close-expense-modal") {
-      expenseModalOpen = false;
-      renderProjectDetailsView(currentProjectId);
+      state.expenseModalOpen = false;
+      renderProjectDetailsView(getCurrentProject()?.id);
+    }
+
+    if (action === "clear-expense-search") {
+      state.expenseSearch = "";
+      renderProjectDetailsView(getCurrentProject()?.id);
     }
 
     if (action === "delete-expense") {
+      handleDeleteExpense(actionElement.dataset.projectId, actionElement.dataset.id);
+    }
+
+    if (action === "show-linked-expenses") {
+      handleShowLinkedExpenses(getCurrentProject()?.id, actionElement.dataset.id);
+    }
+
+    if (action === "open-ai") {
+      openAiModal(getCurrentProject()?.id);
+    }
+
+    if (action === "ai-suggestion") {
       event.stopPropagation();
-      const project = projects.find((item) => item.id === currentProjectId);
-
-      if (!project) {
-        return;
-      }
-
-      const expense = project.expenses.find((item) => item.id === actionElement.dataset.id);
-
-      if (!expense) {
-        return;
-      }
-
-      const confirmed = await confirmAction("Supprimer la dépense", `Voulez-vous supprimer "${escapeHtml(expense.name)}" ?`);
-
-      if (confirmed) {
-        project.expenses = project.expenses.filter((item) => item.id !== expense.id);
-        await updateProject(project);
-        showToast("Dépense supprimée.", "success");
-        renderProjectDetailsView(project.id);
-      }
+      handleAiQuestion(actionElement.dataset.query, actionElement.textContent?.trim());
     }
 
-    if (action === "show-note-form") {
-      showNoteForm();
+    if (action === "close-ai-modal") {
+      state.aiModalOpen = false;
+      state.aiQuestion = "";
+      renderProjectDetailsView(getCurrentProject()?.id);
     }
 
-    if (action === "hide-note-form") {
-      hideNoteForm();
+    if (action === "set-currency") {
+      handleSettingsUpdate("currency", actionElement.dataset.currency);
     }
+  });
 
-    if (action === "delete-note") {
-      event.stopPropagation();
-      const note = notes.find((item) => item.id === actionElement.dataset.id);
+  app.addEventListener("ionChange", (event) => {
+    const toggle = event.target.closest('[data-action="toggle-dark-mode"]');
 
-      if (!note) {
-        return;
-      }
-
-      const confirmed = await confirmAction("Supprimer la note", `Voulez-vous supprimer "${escapeHtml(note.title)}" ?`);
-
-      if (confirmed) {
-        notes = notes.filter((item) => item.id !== note.id);
-        await deleteNoteRecord(note.id);
-        showToast("Note supprimée.", "success");
-        renderNotesView();
-      }
+    if (toggle) {
+      handleSettingsUpdate("darkMode", event.detail.checked);
     }
   });
 
   app.addEventListener("submit", (event) => {
-    if (event.target.id === "projectForm") {
-      handleProjectFormSubmit(event);
+    if (event.target.id === "project-form") {
+      handleProjectSubmit(event);
     }
 
-    if (event.target.id === "expenseForm") {
-      handleExpenseFormSubmit(event);
+    if (event.target.id === "expense-form") {
+      handleExpenseSubmit(event);
     }
 
-    if (event.target.id === "noteForm") {
-      handleNoteFormSubmit(event);
+    if (event.target.id === "ai-form") {
+      handleAiSubmit(event);
     }
   });
 
