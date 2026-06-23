@@ -75,6 +75,7 @@ export async function showToast(message, color = "primary") {
 export function confirmAction(header, message, confirmText = "Supprimer") {
   return new Promise((resolve) => {
     const alert = document.createElement("ion-alert");
+    alert.cssClass = "app-overlay";
     alert.header = header;
     alert.message = message;
     alert.buttons = [
@@ -97,6 +98,7 @@ export function confirmAction(header, message, confirmText = "Supprimer") {
 export function promptText({ header, subHeader, value, placeholder, confirmText }) {
   return new Promise((resolve) => {
     const alert = document.createElement("ion-alert");
+    alert.cssClass = "app-overlay";
     alert.header = header;
     alert.subHeader = subHeader || "";
     alert.inputs = [
@@ -125,6 +127,7 @@ export function promptText({ header, subHeader, value, placeholder, confirmText 
 
 export async function showInfoAlert(header, message) {
   const alert = document.createElement("ion-alert");
+  alert.cssClass = "app-overlay";
   alert.header = header;
   alert.message = message;
   alert.buttons = ["OK"];
@@ -134,6 +137,7 @@ export async function showInfoAlert(header, message) {
 
 export async function showActionSheet(header, buttons) {
   const sheet = document.createElement("ion-action-sheet");
+  sheet.cssClass = "app-overlay";
   sheet.header = header;
   sheet.buttons = [...buttons, { text: "Annuler", role: "cancel" }];
   document.body.appendChild(sheet);

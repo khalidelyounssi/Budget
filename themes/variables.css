@@ -15,6 +15,10 @@
   --ion-color-primary: #0a84ff;
   --ion-color-success: #6fbd50;
   --ion-color-danger: #ef4444;
+  --ion-background-color: #f3f7fb;
+  --ion-text-color: #223043;
+  --ion-card-background: #ffffff;
+  color-scheme: light;
 }
 
 body.dark {
@@ -28,4 +32,10 @@ body.dark {
   --color-muted: #94a3b8;
   --color-border: #263346;
   --shadow-card: 0 14px 32px rgba(0, 0, 0, 0.26);
+  --ion-background-color: #0f1723;
+  --ion-text-color: #edf2f7;
+  --ion-card-background: #17212f;
+  --ion-item-background: #17212f;
+  --ion-toolbar-background: #17212f;
+  color-scheme: dark;
 }

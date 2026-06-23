@@ -11,7 +11,7 @@ import {
 import { addExpense, deleteExpense, filterExpenses, getLinkedExpenses } from "./expenses.js";
 import { buildProjectExport } from "./export.js";
 import { addPhase, deletePhase, ensureProjectPhases, renamePhase } from "./phases.js";
-import { createProject, filterProjects, getProgress, getProjectTotal, getRemainingBudget, normalizeProject } from "./projects.js";
+import { createProject, filterProjects, getProgress, getProjectTotal, getRemainingBudget, hasProjectBudget, normalizeProject } from "./projects.js";
 import { applyTheme, DEFAULT_SETTINGS, normalizeSettings } from "./settings.js";
 import { answerProjectQuestion, getAiWelcomeMessage } from "./ai.js";
 import {
@@ -236,13 +236,19 @@ import {
             const total = getProjectTotal(project);
             const progress = getProgress(project);
             const remaining = getRemainingBudget(project);
+            const hasBudget = hasProjectBudget(project);
+            const isOverBudget = hasBudget && remaining < 0;
             const statusClass = project.status === "completed" ? "completed" : "active";
             return `
-              <article class="project-card" data-action="open-project" data-id="${project.id}">
-                <div class="project-ring" style="--ring-progress:${progress * 3.6}deg; --ring-color:${remaining < 0 ? "var(--color-danger)" : "var(--color-success)"}"></div>
+              <article class="project-card ${hasBudget ? "" : "no-budget"}" data-action="open-project" data-id="${project.id}">
+                ${hasBudget
+                  ? `<div class="project-ring" style="--ring-progress:${progress * 3.6}deg; --ring-color:${remaining < 0 ? "var(--color-danger)" : "var(--color-success)"}"></div>`
+                  : `<div class="project-icon"><ion-icon name="folder-outline"></ion-icon></div>`}
                 <div class="project-copy">
                   <h2>${escapeHtml(project.name)}</h2>
-                  <p>${formatMoney(total, state.settings.currency)} / ${formatMoney(project.estimatedBudget, state.settings.currency)}</p>
+                  <p>${isOverBudget
+                    ? `${escapeHtml(t("budgetExceeded"))}: ${formatMoney(Math.abs(remaining), state.settings.currency)}`
+                    : `${escapeHtml(t("spent"))}: ${formatMoney(total, state.settings.currency)}`}</p>
                   <div class="project-meta">
                     <span class="status-badge ${statusClass}">${project.status === "completed" ? escapeHtml(t("completed")) : escapeHtml(t("inProgress"))}</span>
                     <span class="mini-badge">${project.phases.length} ${escapeHtml(t("phases"))}</span>
@@ -278,7 +284,7 @@ import {
             </label>
 
             <label>
-              <span>${escapeHtml(t("budget"))}</span>
+              <span>${escapeHtml(t("budgetOptional"))}</span>
               <input id="project-budget" class="line-input" type="text" inputmode="decimal" autocomplete="off" placeholder="${escapeHtml(t("budgetPlaceholder"))}" />
             </label>
 
@@ -300,6 +306,8 @@ import {
     const total = getProjectTotal(project);
     const progress = getProgress(project);
     const remaining = getRemainingBudget(project);
+    const hasBudget = hasProjectBudget(project);
+    const isOverBudget = hasBudget && remaining < 0;
     const filteredExpenses = filterExpenses(project, state.expenseSearch);
     const selectedLinkedExpenses = getSelectedLinkedExpenses(project);
 
@@ -315,15 +323,21 @@ import {
           </button>
         </header>
 
-        <section class="panel detail-budget">
-          <div class="detail-budget-top">
-            <strong>${formatMoney(total, state.settings.currency)} / ${formatMoney(project.estimatedBudget, state.settings.currency)}</strong>
-            <span class="remaining-badge ${remaining >= 0 ? "positive" : "negative"}">${escapeHtml(t("remainingBudget"))}: ${formatMoney(Math.abs(remaining), state.settings.currency)}</span>
-          </div>
-          <div class="progress-track">
-            <span style="width:${progress}%"></span>
-          </div>
-        </section>
+        ${hasBudget ? `
+          <section class="panel detail-budget ${isOverBudget ? "exceeded-only" : ""}">
+            ${isOverBudget ? `
+              <div class="detail-budget-top">
+                <strong>${escapeHtml(t("budgetExceeded"))}</strong>
+                <span class="remaining-badge negative">
+                  ${formatMoney(Math.abs(remaining), state.settings.currency)}
+                </span>
+              </div>
+            ` : ""}
+            <div class="progress-track">
+              <span style="width:${progress}%"></span>
+            </div>
+          </section>
+        ` : ""}
 
         <div class="section-header">
           <h2>${escapeHtml(t("expenses"))}</h2>
@@ -371,39 +385,75 @@ import {
       `;
     }
 
+    const groupedExpenses = groupExpensesByPhase(project, expenses);
+
     return `
       <section class="expense-list">
-        ${expenses
-          .map((expense) => {
+        ${groupedExpenses
+          .map((group) => {
             return `
-              <article class="expense-item">
-                <button class="expense-select-button ${state.selectedLinkedExpenseIds.includes(expense.id) ? "active" : ""}" type="button" data-action="toggle-linked-expense" data-id="${expense.id}" aria-label="${escapeHtml(t("linkedExpenses"))}" aria-pressed="${state.selectedLinkedExpenseIds.includes(expense.id)}">
-                  <ion-icon name="${state.selectedLinkedExpenseIds.includes(expense.id) ? "checkmark-outline" : "add-outline"}"></ion-icon>
-                </button>
-                <div>
-                  <h3>${escapeHtml(expense.name)}</h3>
-                  <p>${formatDate(expense.date)} · ${escapeHtml(expense.phase)}</p>
-                  ${expense.supplier ? `<p>${escapeHtml(expense.supplier)}</p>` : ""}
-                  ${expense.note ? `<p>${escapeHtml(expense.note)}</p>` : ""}
-                </div>
-                <div class="expense-side">
-                  <strong>${formatMoney(expense.amount, state.settings.currency)}</strong>
-                  ${expense.linkedExpenseIds.length ? `
-                    <button class="linked-badge" type="button" data-action="show-linked-expenses" data-id="${expense.id}">
-                      <ion-icon name="link-outline"></ion-icon>
-                      ${escapeHtml(t("linkedExpenses"))}
-                    </button>
-                  ` : ""}
-                  <button class="mini-icon-button danger" type="button" data-action="delete-expense" data-project-id="${project.id}" data-id="${expense.id}">
-                    <ion-icon name="trash-outline"></ion-icon>
-                  </button>
-                </div>
-              </article>
+              <section class="expense-phase-group">
+                <header class="expense-phase-header">
+                  <span>${escapeHtml(group.phase)}</span>
+                  <strong>${formatMoney(group.total, state.settings.currency)}</strong>
+                </header>
+                ${group.expenses
+                  .map((expense) => {
+                    return `
+                      <article class="expense-item">
+                        <button class="expense-select-button ${state.selectedLinkedExpenseIds.includes(expense.id) ? "active" : ""}" type="button" data-action="toggle-linked-expense" data-id="${expense.id}" aria-label="${escapeHtml(t("linkedExpenses"))}" aria-pressed="${state.selectedLinkedExpenseIds.includes(expense.id)}">
+                          <ion-icon name="${state.selectedLinkedExpenseIds.includes(expense.id) ? "checkmark-outline" : "add-outline"}"></ion-icon>
+                        </button>
+                        <div>
+                          <h3>${escapeHtml(expense.name)}</h3>
+                          <p>${formatDate(expense.date)}</p>
+                          ${expense.supplier ? `<p>${escapeHtml(expense.supplier)}</p>` : ""}
+                          ${expense.note ? `<p>${escapeHtml(expense.note)}</p>` : ""}
+                        </div>
+                        <div class="expense-side">
+                          <strong>${formatMoney(expense.amount, state.settings.currency)}</strong>
+                          ${expense.linkedExpenseIds.length ? `
+                            <button class="linked-badge" type="button" data-action="show-linked-expenses" data-id="${expense.id}">
+                              <ion-icon name="link-outline"></ion-icon>
+                              ${escapeHtml(t("linkedExpenses"))}
+                            </button>
+                          ` : ""}
+                          <button class="mini-icon-button danger" type="button" data-action="delete-expense" data-project-id="${project.id}" data-id="${expense.id}">
+                            <ion-icon name="trash-outline"></ion-icon>
+                          </button>
+                        </div>
+                      </article>
+                    `;
+                  })
+                  .join("")}
+              </section>
             `;
           })
           .join("")}
       </section>
     `;
+  }
+
+  function groupExpensesByPhase(project, expenses) {
+    const groups = new Map();
+
+    ensureProjectPhases(project).forEach((phase) => {
+      groups.set(phase, { phase, expenses: [], total: 0 });
+    });
+
+    expenses.forEach((expense) => {
+      const phase = expense.phase || t("general");
+
+      if (!groups.has(phase)) {
+        groups.set(phase, { phase, expenses: [], total: 0 });
+      }
+
+      const group = groups.get(phase);
+      group.expenses.push(expense);
+      group.total += Number(expense.amount || 0);
+    });
+
+    return [...groups.values()].filter((group) => group.expenses.length > 0);
   }
 
   function getSelectedLinkedExpenses(project) {
@@ -605,19 +655,16 @@ import {
         </header>
 
         <section class="settings-list">
-          <article class="settings-item panel">
+          <button class="settings-choice panel" type="button" data-action="open-currency-menu">
             <div>
               <h2>${escapeHtml(t("currency"))}</h2>
               <p class="muted">${escapeHtml(t("settingsDescription"))}</p>
             </div>
-            <div class="currency-options">
-              ${["DH", "EUR", "$", "GBP"]
-                .map((currency) => {
-                  return `<button class="currency-button ${state.settings.currency === currency ? "active" : ""}" type="button" data-action="set-currency" data-currency="${currency}">${currency}</button>`;
-                })
-                .join("")}
-            </div>
-          </article>
+            <span class="settings-choice-value">
+              ${escapeHtml(state.settings.currency)}
+              <ion-icon name="chevron-forward-outline"></ion-icon>
+            </span>
+          </button>
 
           <article class="settings-item panel">
             <div>
@@ -627,29 +674,16 @@ import {
             <ion-toggle ${state.settings.darkMode ? "checked" : ""} data-action="toggle-dark-mode"></ion-toggle>
           </article>
 
-          <article class="settings-item settings-item-stack panel">
+          <button class="settings-choice panel" type="button" data-action="open-language-menu">
             <div>
               <h2>${escapeHtml(t("language"))}</h2>
               <p class="muted">${escapeHtml(t("languageDescription"))}</p>
             </div>
-            <div class="language-options">
-              ${[
-                { code: "fr", label: "Français", short: "FR" },
-                { code: "en", label: "English", short: "EN" },
-                { code: "ar", label: "العربية", short: "AR" },
-              ]
-                .map((language) => {
-                  return `
-                    <button class="language-button ${state.settings.language === language.code ? "active" : ""}" type="button" data-action="set-language" data-language="${language.code}">
-                      <span>${language.short}</span>
-                      <strong>${language.label}</strong>
-                      <ion-icon name="${state.settings.language === language.code ? "checkmark-circle-outline" : "ellipse-outline"}"></ion-icon>
-                    </button>
-                  `;
-                })
-                .join("")}
-            </div>
-          </article>
+            <span class="settings-choice-value">
+              ${escapeHtml(getLanguageLabel(state.settings.language))}
+              <ion-icon name="chevron-forward-outline"></ion-icon>
+            </span>
+          </button>
         </section>
       </section>
     `;
@@ -677,9 +711,10 @@ import {
 
     state.savingProject = true;
     const name = normalizeName(document.getElementById("project-name")?.value);
-    const estimatedBudget = parseAmount(document.getElementById("project-budget")?.value);
+    const budgetValue = normalizeName(document.getElementById("project-budget")?.value);
+    const estimatedBudget = budgetValue ? parseAmount(budgetValue) : 0;
 
-    if (!name || estimatedBudget <= 0) {
+    if (!name || (budgetValue && estimatedBudget <= 0)) {
       state.savingProject = false;
       showToast(t("invalidProjectToast"), "warning");
       return;
@@ -859,6 +894,42 @@ import {
         },
       },
     ]);
+  }
+
+  function getLanguageLabel(languageCode) {
+    const labels = {
+      fr: "Français",
+      en: "English",
+      ar: "العربية",
+    };
+
+    return labels[languageCode] || labels.fr;
+  }
+
+  async function openCurrencyMenu() {
+    await showActionSheet(t("currency"), ["DH", "EUR", "$", "GBP"].map((currency) => {
+      return {
+        text: currency === state.settings.currency ? `${currency} ✓` : currency,
+        icon: currency === state.settings.currency ? "checkmark-circle-outline" : "ellipse-outline",
+        handler: () => handleSettingsUpdate("currency", currency),
+      };
+    }));
+  }
+
+  async function openLanguageMenu() {
+    const languages = [
+      { code: "fr", label: "Français" },
+      { code: "en", label: "English" },
+      { code: "ar", label: "العربية" },
+    ];
+
+    await showActionSheet(t("language"), languages.map((language) => {
+      return {
+        text: language.code === state.settings.language ? `${language.label} ✓` : language.label,
+        icon: language.code === state.settings.language ? "checkmark-circle-outline" : "ellipse-outline",
+        handler: () => handleSettingsUpdate("language", language.code),
+      };
+    }));
   }
 
   async function openAiModal(projectId) {
@@ -1172,12 +1243,12 @@ import {
       renderProjectDetailsView(getCurrentProject()?.id);
     }
 
-    if (action === "set-currency") {
-      handleSettingsUpdate("currency", actionElement.dataset.currency);
+    if (action === "open-currency-menu") {
+      openCurrencyMenu();
     }
 
-    if (action === "set-language") {
-      handleSettingsUpdate("language", actionElement.dataset.language);
+    if (action === "open-language-menu") {
+      openLanguageMenu();
     }
   });
 

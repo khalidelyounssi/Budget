@@ -34,8 +34,12 @@ export function getRemainingBudget(project) {
   return Number(project.estimatedBudget || 0) - getProjectTotal(project);
 }
 
+export function hasProjectBudget(project) {
+  return Number(project.estimatedBudget || 0) > 0;
+}
+
 export function getProgress(project) {
-  if (!project.estimatedBudget) {
+  if (!hasProjectBudget(project)) {
     return 0;
   }
 

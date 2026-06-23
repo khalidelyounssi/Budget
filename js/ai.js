@@ -1,4 +1,4 @@
-import { getProjectTotal, getRemainingBudget } from "./projects.js";
+import { getProjectTotal, getRemainingBudget, hasProjectBudget } from "./projects.js";
 import { formatDate, formatMoney } from "./utils.js";
 
 function normalizeQuestion(question) {
@@ -100,15 +100,20 @@ function buildSummaryAnswer(project, currency) {
   const latestExpense = getLatestExpense(project);
   const summaryLines = [
     `Voici le résumé du projet ${project.name}.`,
-    `Budget total: ${formatMoney(project.estimatedBudget, currency)}.`,
     `Dépenses enregistrées: ${project.expenses.length}.`,
     `Montant dépensé: ${formatMoney(total, currency)}.`,
   ];
 
-  if (remaining >= 0) {
-    summaryLines.push(`Budget restant: ${formatMoney(remaining, currency)}.`);
+  if (hasProjectBudget(project)) {
+    summaryLines.splice(1, 0, `Budget total: ${formatMoney(project.estimatedBudget, currency)}.`);
+
+    if (remaining >= 0) {
+      summaryLines.push(`Budget restant: ${formatMoney(remaining, currency)}.`);
+    } else {
+      summaryLines.push(`Le budget est dépassé de ${formatMoney(Math.abs(remaining), currency)}.`);
+    }
   } else {
-    summaryLines.push(`Le budget est dépassé de ${formatMoney(Math.abs(remaining), currency)}.`);
+    summaryLines.push("Aucun budget n'est défini pour ce projet.");
   }
 
   if (biggestExpense) {
@@ -125,6 +130,13 @@ function buildSummaryAnswer(project, currency) {
 function buildBudgetAnswer(project, currency) {
   const total = getProjectTotal(project);
   const remaining = getRemainingBudget(project);
+
+  if (!hasProjectBudget(project)) {
+    return createResponse(
+      `Aucun budget n'est défini pour ce projet. Le total dépensé est actuellement de ${formatMoney(total, currency)}.`,
+      getBudgetOptions()
+    );
+  }
 
   if (remaining >= 0) {
     return createResponse(
