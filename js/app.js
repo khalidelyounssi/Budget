@@ -325,14 +325,12 @@ import {
 
         ${hasBudget ? `
           <section class="panel detail-budget ${isOverBudget ? "exceeded-only" : ""}">
-            ${isOverBudget ? `
-              <div class="detail-budget-top">
-                <strong>${escapeHtml(t("budgetExceeded"))}</strong>
-                <span class="remaining-badge negative">
-                  ${formatMoney(Math.abs(remaining), state.settings.currency)}
-                </span>
-              </div>
-            ` : ""}
+            <div class="detail-budget-top">
+              <strong>${formatMoney(total, state.settings.currency)} / ${formatMoney(project.estimatedBudget, state.settings.currency)}</strong>
+              <span class="remaining-badge ${isOverBudget ? "negative" : "positive"}">
+                ${escapeHtml(isOverBudget ? t("budgetExceeded") : t("remainingBudget"))}: ${formatMoney(Math.abs(remaining), state.settings.currency)}
+              </span>
+            </div>
             <div class="progress-track">
               <span style="width:${progress}%"></span>
             </div>
