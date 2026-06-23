@@ -223,8 +223,8 @@ import {
       return `
         <div class="empty-state">
           <ion-icon name="folder-open-outline"></ion-icon>
-          <h2>Aucun projet</h2>
-          <p>Ajoutez un projet pour commencer le suivi du budget.</p>
+          <h2>${escapeHtml(t("noProject"))}</h2>
+          <p>${escapeHtml(t("noProjectDescription"))}</p>
         </div>
       `;
     }
@@ -263,7 +263,7 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-home">
+          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
             <ion-icon name="arrow-back-outline"></ion-icon>
           </button>
           <h1 class="title-center">${escapeHtml(t("addProject"))}</h1>
@@ -274,12 +274,12 @@ import {
           <form id="project-form" class="line-form">
             <label>
               <span>${escapeHtml(t("projectName"))}</span>
-              <input id="project-name" class="line-input" type="text" autocomplete="off" placeholder="Ex: Rénovation" />
+              <input id="project-name" class="line-input" type="text" autocomplete="off" placeholder="${escapeHtml(t("projectNamePlaceholder"))}" />
             </label>
 
             <label>
               <span>${escapeHtml(t("budget"))}</span>
-              <input id="project-budget" class="line-input" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex: 30000,00" />
+              <input id="project-budget" class="line-input" type="text" inputmode="decimal" autocomplete="off" placeholder="${escapeHtml(t("budgetPlaceholder"))}" />
             </label>
 
             <ion-button class="primary-button" expand="block" type="submit">${escapeHtml(t("add"))}</ion-button>
@@ -306,7 +306,7 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-home">
+          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
             <ion-icon name="arrow-back-outline"></ion-icon>
           </button>
           <h1 class="title-center detail-title">${escapeHtml(project.name)}</h1>
@@ -355,8 +355,8 @@ import {
       return `
         <div class="empty-state">
           <ion-icon name="receipt-outline"></ion-icon>
-          <h2>Aucune dépense</h2>
-          <p>Utilisez le bouton + pour ajouter la première dépense.</p>
+          <h2>${escapeHtml(t("noExpense"))}</h2>
+          <p>${escapeHtml(t("noExpenseDescription"))}</p>
         </div>
       `;
     }
@@ -365,8 +365,8 @@ import {
       return `
         <div class="empty-state">
           <ion-icon name="search-outline"></ion-icon>
-          <h2>Aucun résultat</h2>
-          <p>Essayez une autre recherche.</p>
+          <h2>${escapeHtml(t("noResult"))}</h2>
+          <p>${escapeHtml(t("noResultDescription"))}</p>
         </div>
       `;
     }
@@ -437,29 +437,29 @@ import {
         <section class="modal-card" data-modal-panel>
           <div class="modal-header">
             <h2>${escapeHtml(t("addExpense"))}</h2>
-            <button class="ghost-button" type="button" aria-label="Fermer" data-action="close-expense-modal">
+            <button class="ghost-button" type="button" aria-label="${escapeHtml(t("close"))}" data-action="close-expense-modal">
               <ion-icon name="close-outline"></ion-icon>
             </button>
           </div>
           <form id="expense-form" class="line-form">
             <label>
-              <span>Nom</span>
-              <input id="expense-name" class="line-input" type="text" autocomplete="off" placeholder="Ex: Peinture" />
+              <span>${escapeHtml(t("name"))}</span>
+              <input id="expense-name" class="line-input" type="text" autocomplete="off" placeholder="${escapeHtml(t("expenseNamePlaceholder"))}" />
             </label>
             <label>
-              <span>Montant</span>
-              <input id="expense-amount" class="line-input" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex: 1500,00" />
+              <span>${escapeHtml(t("amount"))}</span>
+              <input id="expense-amount" class="line-input" type="text" inputmode="decimal" autocomplete="off" placeholder="${escapeHtml(t("amountPlaceholder"))}" />
             </label>
             <label>
-              <span>Fournisseur</span>
-              <input id="expense-supplier" class="line-input" type="text" autocomplete="off" placeholder="Ex: Atlas" />
+              <span>${escapeHtml(t("supplier"))}</span>
+              <input id="expense-supplier" class="line-input" type="text" autocomplete="off" placeholder="${escapeHtml(t("supplierPlaceholder"))}" />
             </label>
             <label>
-              <span>Date</span>
+              <span>${escapeHtml(t("date"))}</span>
               <input id="expense-date" class="line-input" type="date" value="${new Date().toISOString().substring(0, 10)}" />
             </label>
             <label>
-              <span>Phase</span>
+              <span>${escapeHtml(t("phase"))}</span>
               <select id="expense-phase" class="line-select">
                 ${ensureProjectPhases(project).map((phase) => `<option value="${escapeHtml(phase)}">${escapeHtml(phase)}</option>`).join("")}
               </select>
@@ -493,7 +493,7 @@ import {
               <h2>${escapeHtml(t("aiAssistant"))}</h2>
               <p class="muted">${project ? `Analyse budgétaire et suivi du projet ${escapeHtml(project.name)}.` : "Analyse budgétaire et suivi du projet."}</p>
             </div>
-            <button class="ghost-button ai-close-button" type="button" aria-label="Fermer" data-action="close-ai-modal">
+            <button class="ghost-button ai-close-button" type="button" aria-label="${escapeHtml(t("close"))}" data-action="close-ai-modal">
               <ion-icon name="close-outline"></ion-icon>
             </button>
           </div>
@@ -558,7 +558,7 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-details" data-id="${project.id}">
+          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-details" data-id="${project.id}">
             <ion-icon name="arrow-back-outline"></ion-icon>
           </button>
           <h1 class="title-center">${escapeHtml(t("projectPhases"))}</h1>
@@ -597,7 +597,7 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="Retour" data-action="go-home">
+          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
             <ion-icon name="arrow-back-outline"></ion-icon>
           </button>
           <h1 class="title-center">${escapeHtml(t("settings"))}</h1>
@@ -627,18 +627,25 @@ import {
             <ion-toggle ${state.settings.darkMode ? "checked" : ""} data-action="toggle-dark-mode"></ion-toggle>
           </article>
 
-          <article class="settings-item panel">
+          <article class="settings-item settings-item-stack panel">
             <div>
               <h2>${escapeHtml(t("language"))}</h2>
               <p class="muted">${escapeHtml(t("languageDescription"))}</p>
             </div>
-            <div class="currency-options">
+            <div class="language-options">
               ${[
-                { code: "fr", label: "Français" },
-                { code: "en", label: "English" },
+                { code: "fr", label: "Français", short: "FR" },
+                { code: "en", label: "English", short: "EN" },
+                { code: "ar", label: "العربية", short: "AR" },
               ]
                 .map((language) => {
-                  return `<button class="currency-button ${state.settings.language === language.code ? "active" : ""}" type="button" data-action="set-language" data-language="${language.code}">${language.label}</button>`;
+                  return `
+                    <button class="language-button ${state.settings.language === language.code ? "active" : ""}" type="button" data-action="set-language" data-language="${language.code}">
+                      <span>${language.short}</span>
+                      <strong>${language.label}</strong>
+                      <ion-icon name="${state.settings.language === language.code ? "checkmark-circle-outline" : "ellipse-outline"}"></ion-icon>
+                    </button>
+                  `;
                 })
                 .join("")}
             </div>
@@ -674,7 +681,7 @@ import {
 
     if (!name || estimatedBudget <= 0) {
       state.savingProject = false;
-      showToast("Ajoutez un nom et un budget positif.", "warning");
+      showToast(t("invalidProjectToast"), "warning");
       return;
     }
 
@@ -682,7 +689,7 @@ import {
     state.projects.unshift(project);
     await saveProject(project);
     state.savingProject = false;
-    showToast("Projet créé.", "success");
+    showToast(t("projectCreatedToast"), "success");
     navigate("home");
   }
 
@@ -711,7 +718,7 @@ import {
 
     if (!name || amount <= 0 || !date) {
       state.savingExpense = false;
-      showToast("Complétez le nom, le montant positif et la date.", "warning");
+      showToast(t("invalidExpenseToast"), "warning");
       return;
     }
 
@@ -729,7 +736,7 @@ import {
     state.expenseModalOpen = false;
     state.selectedLinkedExpenseIds = [];
     state.savingExpense = false;
-    showToast("Dépense ajoutée.", "success");
+    showToast(t("expenseCreatedToast"), "success");
     renderProjectDetailsView(project.id);
   }
 
@@ -770,7 +777,7 @@ import {
     }
 
     await showActionSheet(project.name, [
-      { text: "Ouvrir", icon: "open-outline", handler: () => navigate("details", project.id) },
+      { text: t("open"), icon: "open-outline", handler: () => navigate("details", project.id) },
       { text: t("projectPhases"), icon: "layers-outline", handler: () => navigate("phases", project.id) },
       {
         text: project.status === "completed" ? t("inProgress") : t("completed"),
@@ -783,11 +790,11 @@ import {
       },
       { text: t("exportJson"), icon: "download-outline", handler: () => exportCurrentProject(project.id) },
       {
-        text: "Supprimer",
+        text: t("delete"),
         role: "destructive",
         icon: "trash-outline",
         handler: async () => {
-          const confirmed = await confirmAction("Supprimer le projet", `Supprimer "${project.name}" ?`);
+          const confirmed = await confirmAction(t("deleteProject"), `${t("delete")} "${project.name}" ?`);
           if (!confirmed) {
             return;
           }
@@ -808,14 +815,14 @@ import {
     await showActionSheet(project.name, [
       { text: t("projectPhases"), icon: "layers-outline", handler: () => navigate("phases", project.id) },
       {
-        text: "Rechercher une dépense",
+        text: t("searchExpense"),
         icon: "search-outline",
         handler: async () => {
           const query = await promptText({
-            header: "Recherche",
+            header: t("search"),
             value: state.expenseSearch,
-            placeholder: "Nom, fournisseur, phase...",
-            confirmText: "Chercher",
+            placeholder: t("searchPlaceholder"),
+            confirmText: t("search"),
           });
 
           if (query === null) {
@@ -838,11 +845,11 @@ import {
         },
       },
       {
-        text: "Supprimer",
+        text: t("delete"),
         role: "destructive",
         icon: "trash-outline",
         handler: async () => {
-          const confirmed = await confirmAction("Supprimer le projet", `Supprimer "${project.name}" ?`);
+          const confirmed = await confirmAction(t("deleteProject"), `${t("delete")} "${project.name}" ?`);
           if (!confirmed) {
             return;
           }
@@ -892,7 +899,7 @@ import {
     const value = await promptText({
       header: t("addPhase"),
       subHeader: ensureProjectPhases(project).join(" • "),
-      placeholder: "Ex: Électricité",
+      placeholder: t("phasePlaceholder"),
       confirmText: t("add"),
     });
 
@@ -924,8 +931,8 @@ import {
     const value = await promptText({
       header: t("editPhase"),
       value: phaseName,
-      placeholder: "Ex: Électricité",
-      confirmText: "Enregistrer",
+      placeholder: t("phasePlaceholder"),
+      confirmText: t("save"),
     });
 
     if (value === null) {
@@ -986,7 +993,7 @@ import {
       return;
     }
 
-    const confirmed = await confirmAction("Supprimer la dépense", `Supprimer "${expense.name}" ?`);
+    const confirmed = await confirmAction(t("deleteExpense"), `${t("delete")} "${expense.name}" ?`);
     if (!confirmed) {
       return;
     }
@@ -1011,7 +1018,7 @@ import {
     const linkedExpenses = getLinkedExpenses(project, expense);
     const message = linkedExpenses.length
       ? linkedExpenses.map((item) => `${item.name} • ${formatMoney(item.amount, state.settings.currency)}`).join("<br>")
-      : "Aucune dépense liée.";
+      : t("noLinkedExpense");
 
     await showInfoAlert(t("linkedExpenses"), message);
   }
@@ -1026,7 +1033,7 @@ import {
     }
 
     if (type === "language") {
-      state.settings.language = value === "en" ? "en" : "fr";
+      state.settings.language = ["fr", "en", "ar"].includes(value) ? value : "fr";
     }
 
     state.settings = normalizeSettings(state.settings);

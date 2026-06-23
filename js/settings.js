@@ -5,7 +5,10 @@ export const DEFAULT_SETTINGS = {
 };
 
 export function normalizeSettings(settings) {
-  const language = settings && settings.language === "en" ? "en" : DEFAULT_SETTINGS.language;
+  const supportedLanguages = ["fr", "en", "ar"];
+  const language = supportedLanguages.includes(settings && settings.language)
+    ? settings.language
+    : DEFAULT_SETTINGS.language;
 
   return {
     ...DEFAULT_SETTINGS,
@@ -19,4 +22,5 @@ export function normalizeSettings(settings) {
 
 export function applyTheme(settings) {
   document.body.classList.toggle("dark", Boolean(settings.darkMode));
+  document.documentElement.dir = settings.language === "ar" ? "rtl" : "ltr";
 }
