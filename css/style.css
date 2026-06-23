@@ -284,6 +284,29 @@ button {
   font-size: 30px;
 }
 
+.detail-fab-stack {
+  position: fixed;
+  right: max(20px, calc((100vw - 560px) / 2 + 20px));
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  z-index: 10;
+  display: grid;
+  gap: 14px;
+  justify-items: end;
+}
+
+.detail-fab-stack .fab-button {
+  position: static;
+}
+
+.fab-button-secondary {
+  background: linear-gradient(180deg, #7ed958 0%, #6bc449 100%);
+  box-shadow: 0 16px 30px rgba(111, 189, 80, 0.22);
+}
+
+.fab-button-secondary ion-icon {
+  font-size: 24px;
+}
+
 .form-card {
   padding: 20px;
 }
@@ -479,6 +502,28 @@ button {
   gap: 14px;
 }
 
+.expense-select-button {
+  display: grid;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: rgba(120, 137, 154, 0.08);
+  color: var(--color-muted);
+}
+
+.expense-select-button.active {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: #ffffff;
+}
+
+.expense-select-button ion-icon {
+  font-size: 20px;
+}
+
 .expense-item p {
   margin: 6px 0 0;
   color: var(--color-muted);
@@ -489,6 +534,12 @@ button {
 .expense-side {
   flex-direction: column;
   align-items: end;
+  flex: 0 0 auto;
+}
+
+.expense-item > div:not(.expense-side) {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .expense-side strong {
@@ -504,6 +555,54 @@ button {
   color: var(--color-primary);
   font-size: 12px;
   font-weight: 700;
+}
+
+.linked-selection,
+.linked-preview {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.linked-selection {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.linked-selection p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.linked-preview {
+  display: grid;
+}
+
+.linked-preview > span {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.linked-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.linked-preview-list strong {
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(111, 189, 80, 0.12);
+  color: var(--color-success);
+  font-size: 13px;
 }
 
 .empty-state {

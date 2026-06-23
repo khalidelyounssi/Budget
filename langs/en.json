@@ -25,5 +25,11 @@
   "projects": "Projects",
   "remainingBudget": "Remaining budget",
   "settingsDescription": "Customize the app.",
+  "darkModeDescription": "Enable or disable dark mode.",
+  "language": "Language",
+  "languageDescription": "Choose the app language.",
+  "selectedLinkedExpenses": "selected expense(s)",
+  "willBeLinked": "They will be linked to the next expense you add.",
+  "clearSelection": "Clear selection",
   "general": "General"
 }

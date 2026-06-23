@@ -5,13 +5,15 @@ export const DEFAULT_SETTINGS = {
 };
 
 export function normalizeSettings(settings) {
+  const language = settings && settings.language === "en" ? "en" : DEFAULT_SETTINGS.language;
+
   return {
     ...DEFAULT_SETTINGS,
     ...(settings || {}),
     id: "app-settings",
     darkMode: Boolean(settings && settings.darkMode),
     currency: settings && settings.currency ? settings.currency : DEFAULT_SETTINGS.currency,
-    language: settings && settings.language ? settings.language : DEFAULT_SETTINGS.language,
+    language,
   };
 }
 

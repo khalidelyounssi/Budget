@@ -41,6 +41,7 @@ import {
     projectFilter: "active",
     expenseSearch: "",
     expenseModalOpen: false,
+    selectedLinkedExpenseIds: [],
     aiModalOpen: false,
     aiProjectId: "",
     aiQuestion: "",
@@ -93,6 +94,7 @@ import {
     state.expenseModalOpen = false;
     state.aiModalOpen = false;
     state.expenseSearch = "";
+    state.selectedLinkedExpenseIds = [];
 
     if (view === "home") {
       location.hash = "#/";
@@ -127,8 +129,9 @@ import {
     try {
       renderLoadingView();
       await openDatabase();
-      state.labels = await loadLanguage("fr");
       state.settings = normalizeSettings(await getSettings());
+      state.labels = await loadLanguage(state.settings.language);
+      document.documentElement.lang = state.settings.language;
       applyTheme(state.settings);
       await refreshProjects();
       state.appReady = true;
@@ -189,14 +192,11 @@ import {
 
   function renderHomeView() {
     const filteredProjects = filterProjects(state.projects, state.projectFilter);
-    const totalBudget = state.projects.reduce((sum, project) => sum + Number(project.estimatedBudget || 0), 0);
-    const totalSpent = state.projects.reduce((sum, project) => sum + getProjectTotal(project), 0);
 
     app.innerHTML = `
       <section class="page">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">Static App</p>
             <h1>${escapeHtml(t("appTitle"))}</h1>
           </div>
           <button class="circle-button" type="button" aria-label="${escapeHtml(t("settings"))}" data-action="go-settings">
@@ -208,21 +208,6 @@ import {
           <button class="${state.projectFilter === "active" ? "active" : ""}" type="button" data-action="set-filter" data-filter="active">${escapeHtml(t("inProgress"))}</button>
           <button class="${state.projectFilter === "completed" ? "active" : ""}" type="button" data-action="set-filter" data-filter="completed">${escapeHtml(t("completed"))}</button>
         </div>
-
-        <section class="summary-grid">
-          <article class="summary-card">
-            <span>${escapeHtml(t("projects"))}</span>
-            <strong>${state.projects.length}</strong>
-          </article>
-          <article class="summary-card">
-            <span>${escapeHtml(t("spent"))}</span>
-            <strong>${formatMoney(totalSpent, state.settings.currency)}</strong>
-          </article>
-          <article class="summary-card">
-            <span>${escapeHtml(t("totalBudget"))}</span>
-            <strong>${formatMoney(totalBudget, state.settings.currency)}</strong>
-          </article>
-        </section>
 
         ${renderProjectList(filteredProjects)}
 
@@ -316,6 +301,7 @@ import {
     const progress = getProgress(project);
     const remaining = getRemainingBudget(project);
     const filteredExpenses = filterExpenses(project, state.expenseSearch);
+    const selectedLinkedExpenses = getSelectedLinkedExpenses(project);
 
     app.innerHTML = `
       <section class="page">
@@ -329,16 +315,6 @@ import {
           </button>
         </header>
 
-        <div class="detail-top-actions">
-          <button class="assistant-launch" type="button" data-action="open-ai" aria-label="${escapeHtml(t("aiAssistant"))}">
-            <span class="assistant-launch-copy">
-              <strong>${escapeHtml(t("aiAssistant"))}</strong>
-              <small>Analyse budgétaire du projet</small>
-            </span>
-            <ion-icon name="sparkles-outline"></ion-icon>
-          </button>
-        </div>
-
         <section class="panel detail-budget">
           <div class="detail-budget-top">
             <strong>${formatMoney(total, state.settings.currency)} / ${formatMoney(project.estimatedBudget, state.settings.currency)}</strong>
@@ -349,30 +325,24 @@ import {
           </div>
         </section>
 
-        <section class="panel">
-          <div class="section-header">
-            <h2>${escapeHtml(t("projectPhases"))}</h2>
-            <button class="mini-icon-button" type="button" data-action="go-phases" data-id="${project.id}">
-              <ion-icon name="layers-outline"></ion-icon>
-            </button>
-          </div>
-          <div class="phases-wrap">
-            ${ensureProjectPhases(project).map((phase) => `<span class="phase-chip">${escapeHtml(phase)}</span>`).join("")}
-          </div>
-        </section>
-
         <div class="section-header">
           <h2>${escapeHtml(t("expenses"))}</h2>
-          <span class="muted">Suivi détaillé</span>
         </div>
+
+        ${renderLinkedSelectionInfo(selectedLinkedExpenses)}
 
         ${state.expenseSearch ? `<button class="search-chip" type="button" data-action="clear-expense-search">${escapeHtml(state.expenseSearch)} <ion-icon name="close-outline"></ion-icon></button>` : ""}
 
         ${renderExpenseList(project, filteredExpenses)}
 
-        <button class="fab-button" type="button" aria-label="${escapeHtml(t("addExpense"))}" data-action="open-expense-modal">
-          <ion-icon name="add-outline"></ion-icon>
-        </button>
+        <div class="detail-fab-stack">
+          <button class="fab-button fab-button-secondary" type="button" aria-label="${escapeHtml(t("aiAssistant"))}" data-action="open-ai">
+            <ion-icon name="sparkles-outline"></ion-icon>
+          </button>
+          <button class="fab-button" type="button" aria-label="${escapeHtml(t("addExpense"))}" data-action="open-expense-modal">
+            <ion-icon name="add-outline"></ion-icon>
+          </button>
+        </div>
 
         ${state.expenseModalOpen ? renderExpenseModal(project) : ""}
         ${state.aiModalOpen ? renderAiModal() : ""}
@@ -407,6 +377,9 @@ import {
           .map((expense) => {
             return `
               <article class="expense-item">
+                <button class="expense-select-button ${state.selectedLinkedExpenseIds.includes(expense.id) ? "active" : ""}" type="button" data-action="toggle-linked-expense" data-id="${expense.id}" aria-label="${escapeHtml(t("linkedExpenses"))}" aria-pressed="${state.selectedLinkedExpenseIds.includes(expense.id)}">
+                  <ion-icon name="${state.selectedLinkedExpenseIds.includes(expense.id) ? "checkmark-outline" : "add-outline"}"></ion-icon>
+                </button>
                 <div>
                   <h3>${escapeHtml(expense.name)}</h3>
                   <p>${formatDate(expense.date)} · ${escapeHtml(expense.phase)}</p>
@@ -433,8 +406,31 @@ import {
     `;
   }
 
+  function getSelectedLinkedExpenses(project) {
+    return project.expenses.filter((expense) => state.selectedLinkedExpenseIds.includes(expense.id));
+  }
+
+  function renderLinkedSelectionInfo(expenses) {
+    if (!expenses.length) {
+      return "";
+    }
+
+    return `
+      <section class="linked-selection">
+        <div>
+          <strong>${expenses.length} ${escapeHtml(t("selectedLinkedExpenses"))}</strong>
+          <p>${escapeHtml(t("willBeLinked"))}</p>
+        </div>
+        <button class="mini-icon-button" type="button" data-action="clear-linked-selection" aria-label="${escapeHtml(t("clearSelection"))}">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </section>
+    `;
+  }
+
   function renderExpenseModal(project) {
-    const expenses = project.expenses;
+    const selectedLinkedExpenses = getSelectedLinkedExpenses(project);
+
     return `
       <div class="modal-screen">
         <button class="modal-backdrop" type="button" data-action="close-expense-modal"></button>
@@ -468,25 +464,16 @@ import {
                 ${ensureProjectPhases(project).map((phase) => `<option value="${escapeHtml(phase)}">${escapeHtml(phase)}</option>`).join("")}
               </select>
             </label>
-            ${expenses.length ? `
-              <fieldset class="panel">
-                <legend class="eyebrow">${escapeHtml(t("linkedExpenses"))}</legend>
-                ${expenses
-                  .map((expense) => {
-                    return `
-                      <label class="mini-badge">
-                        <input type="checkbox" name="linked-expense" value="${expense.id}" />
-                        <span>${escapeHtml(expense.name)}</span>
-                      </label>
-                    `;
-                  })
-                  .join("")}
-              </fieldset>
+            ${selectedLinkedExpenses.length ? `
+              <section class="linked-preview">
+                <span>${escapeHtml(t("linkedExpenses"))}</span>
+                <div class="linked-preview-list">
+                  ${selectedLinkedExpenses
+                    .map((expense) => `<strong>${escapeHtml(expense.name)}</strong>`)
+                    .join("")}
+                </div>
+              </section>
             ` : ""}
-            <label>
-              <span>Note</span>
-              <textarea id="expense-note" class="line-textarea" rows="3" placeholder="Remarque optionnelle"></textarea>
-            </label>
             <ion-button class="primary-button" expand="block" type="submit">${escapeHtml(t("add"))}</ion-button>
           </form>
         </section>
@@ -635,9 +622,26 @@ import {
           <article class="settings-item panel">
             <div>
               <h2>${escapeHtml(t("darkMode"))}</h2>
-              <p class="muted">Activer ou désactiver le thème sombre.</p>
+              <p class="muted">${escapeHtml(t("darkModeDescription"))}</p>
             </div>
             <ion-toggle ${state.settings.darkMode ? "checked" : ""} data-action="toggle-dark-mode"></ion-toggle>
+          </article>
+
+          <article class="settings-item panel">
+            <div>
+              <h2>${escapeHtml(t("language"))}</h2>
+              <p class="muted">${escapeHtml(t("languageDescription"))}</p>
+            </div>
+            <div class="currency-options">
+              ${[
+                { code: "fr", label: "Français" },
+                { code: "en", label: "English" },
+              ]
+                .map((language) => {
+                  return `<button class="currency-button ${state.settings.language === language.code ? "active" : ""}" type="button" data-action="set-language" data-language="${language.code}">${language.label}</button>`;
+                })
+                .join("")}
+            </div>
           </article>
         </section>
       </section>
@@ -701,8 +705,9 @@ import {
     const supplier = normalizeName(document.getElementById("expense-supplier")?.value);
     const date = document.getElementById("expense-date")?.value || "";
     const phase = document.getElementById("expense-phase")?.value || "Général";
-    const note = normalizeName(document.getElementById("expense-note")?.value);
-    const linkedExpenseIds = [...document.querySelectorAll('input[name="linked-expense"]:checked')].map((input) => input.value);
+    const linkedExpenseIds = state.selectedLinkedExpenseIds.filter((expenseId) => {
+      return project.expenses.some((expense) => expense.id === expenseId);
+    });
 
     if (!name || amount <= 0 || !date) {
       state.savingExpense = false;
@@ -716,12 +721,13 @@ import {
       supplier,
       date,
       phase,
-      note,
+      note: "",
       linkedExpenseIds,
     });
 
     await persistProject(project);
     state.expenseModalOpen = false;
+    state.selectedLinkedExpenseIds = [];
     state.savingExpense = false;
     showToast("Dépense ajoutée.", "success");
     renderProjectDetailsView(project.id);
@@ -986,6 +992,7 @@ import {
     }
 
     deleteExpense(project, expenseId);
+    state.selectedLinkedExpenseIds = state.selectedLinkedExpenseIds.filter((id) => id !== expenseId);
     await persistProject(project);
     renderProjectDetailsView(project.id);
   }
@@ -1018,7 +1025,15 @@ import {
       state.settings.darkMode = Boolean(value);
     }
 
+    if (type === "language") {
+      state.settings.language = value === "en" ? "en" : "fr";
+    }
+
     state.settings = normalizeSettings(state.settings);
+    if (type === "language") {
+      state.labels = await loadLanguage(state.settings.language);
+      document.documentElement.lang = state.settings.language;
+    }
     applyTheme(state.settings);
     await saveSettings(state.settings);
     renderSettingsView();
@@ -1111,6 +1126,22 @@ import {
       renderProjectDetailsView(getCurrentProject()?.id);
     }
 
+    if (action === "toggle-linked-expense") {
+      event.stopPropagation();
+      const expenseId = actionElement.dataset.id;
+      if (state.selectedLinkedExpenseIds.includes(expenseId)) {
+        state.selectedLinkedExpenseIds = state.selectedLinkedExpenseIds.filter((id) => id !== expenseId);
+      } else {
+        state.selectedLinkedExpenseIds = [...state.selectedLinkedExpenseIds, expenseId];
+      }
+      renderProjectDetailsView(getCurrentProject()?.id);
+    }
+
+    if (action === "clear-linked-selection") {
+      state.selectedLinkedExpenseIds = [];
+      renderProjectDetailsView(getCurrentProject()?.id);
+    }
+
     if (action === "delete-expense") {
       handleDeleteExpense(actionElement.dataset.projectId, actionElement.dataset.id);
     }
@@ -1136,6 +1167,10 @@ import {
 
     if (action === "set-currency") {
       handleSettingsUpdate("currency", actionElement.dataset.currency);
+    }
+
+    if (action === "set-language") {
+      handleSettingsUpdate("language", actionElement.dataset.language);
     }
   });
 

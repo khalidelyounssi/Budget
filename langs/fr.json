@@ -25,5 +25,11 @@
   "projects": "Projets",
   "remainingBudget": "Budget restant",
   "settingsDescription": "Personnalisez l'application.",
+  "darkModeDescription": "Activer ou désactiver le thème sombre.",
+  "language": "Langue",
+  "languageDescription": "Choisir la langue de l'application.",
+  "selectedLinkedExpenses": "dépense(s) sélectionnée(s)",
+  "willBeLinked": "Elles seront liées à la prochaine dépense ajoutée.",
+  "clearSelection": "Effacer la sélection",
   "general": "Général"
 }
