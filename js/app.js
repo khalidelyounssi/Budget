@@ -48,6 +48,7 @@ import {
       installed: false,
       manualInstall: false,
       online: navigator.onLine,
+      platform: "standard",
     },
     aiModalOpen: false,
     aiProjectId: "",
@@ -55,10 +56,92 @@ import {
     aiMessages: [],
     savingProject: false,
     savingExpense: false,
+    installPopupOpen: false,
   };
 
   function t(key) {
     return state.labels[key] || key;
+  }
+
+  function renderIcon(name) {
+    const fallbackIcons = {
+      "add-outline": "+",
+      "arrow-back-outline": "←",
+      "calendar-outline": "▣",
+      "chatbubble-ellipses-outline": "•••",
+      "checkmark-circle-outline": "✓",
+      "chevron-forward-outline": "›",
+      "close-outline": "×",
+      "create-outline": "✎",
+      "download-outline": "↓",
+      "ellipsis-vertical-outline": "⋮",
+      "layers-outline": "▤",
+      "open-outline": "↗",
+      "phone-portrait-outline": "▯",
+      "save-outline": "▣",
+      "search-outline": "⌕",
+      "settings-outline": "⚙",
+      "sparkles-outline": "✦",
+      "sync-outline": "↻",
+      "trash-outline": "⌫",
+    };
+
+    return `<span class="ui-icon" data-icon="${escapeHtml(name)}" data-fallback="${escapeHtml(fallbackIcons[name] || "•")}" aria-hidden="true"></span>`;
+  }
+
+  const iconCache = new Map();
+  let iconsObserverStarted = false;
+  let iconHydrationQueued = false;
+
+  function startIconHydration() {
+    if (iconsObserverStarted) {
+      return;
+    }
+
+    iconsObserverStarted = true;
+    new MutationObserver(scheduleIconHydration).observe(app, { childList: true, subtree: true });
+    scheduleIconHydration();
+  }
+
+  function scheduleIconHydration() {
+    if (iconHydrationQueued) {
+      return;
+    }
+
+    iconHydrationQueued = true;
+    requestAnimationFrame(() => {
+      iconHydrationQueued = false;
+      hydrateIcons();
+    });
+  }
+
+  async function getIconSvg(iconName) {
+    if (!iconCache.has(iconName)) {
+      iconCache.set(
+        iconName,
+        fetch(`vendor/ionicons/svg/${iconName}.svg`)
+          .then((response) => (response.ok ? response.text() : ""))
+          .then((svg) => svg.replace("<svg ", '<svg focusable="false" '))
+          .catch(() => "")
+      );
+    }
+
+    return iconCache.get(iconName);
+  }
+
+  async function hydrateIcons() {
+    const icons = [...document.querySelectorAll(".ui-icon[data-icon]:empty")];
+
+    await Promise.all(icons.map(async (icon) => {
+      const svg = await getIconSvg(icon.dataset.icon);
+      if (!svg) {
+        icon.classList.add("icon-fallback");
+        icon.textContent = icon.dataset.fallback || "";
+        return;
+      }
+
+      icon.innerHTML = svg;
+    }));
   }
 
   async function loadLanguage(languageCode) {
@@ -140,12 +223,14 @@ import {
       state.labels = await loadLanguage(state.settings.language);
       document.documentElement.lang = state.settings.language;
       applyTheme(state.settings);
+      startIconHydration();
       await refreshProjects();
       state.appReady = true;
       if (window.BudgetPwa) {
         state.pwa = { ...state.pwa, ...window.BudgetPwa.getState() };
       }
       render();
+      window.setTimeout(openInstallPopup, 500);
     } catch (error) {
       console.error("App initialization failed.", error);
       renderLoadingView("Erreur de chargement");
@@ -161,7 +246,7 @@ import {
     app.innerHTML = `
       <section class="page">
         <div class="empty-state">
-          <ion-icon name="sync-outline"></ion-icon>
+          ${renderIcon("sync-outline")}
           <h2>${escapeHtml(title || "Chargement...")}</h2>
           <p>Initialisation des données locales.</p>
         </div>
@@ -210,7 +295,7 @@ import {
             <h1>${escapeHtml(t("appTitle"))}</h1>
           </div>
           <button class="circle-button" type="button" aria-label="${escapeHtml(t("settings"))}" data-action="go-settings">
-            <ion-icon name="settings-outline"></ion-icon>
+            ${renderIcon("settings-outline")}
           </button>
         </header>
 
@@ -219,12 +304,10 @@ import {
           <button class="${state.projectFilter === "completed" ? "active" : ""}" type="button" data-action="set-filter" data-filter="completed">${escapeHtml(t("completed"))}</button>
         </div>
 
-        ${renderInstallCard()}
-
         ${renderProjectList(filteredProjects)}
 
         <button class="fab-button" type="button" aria-label="${escapeHtml(t("addProject"))}" data-action="go-add-project">
-          <ion-icon name="add-outline"></ion-icon>
+          ${renderIcon("add-outline")}
         </button>
       </section>
     `;
@@ -233,32 +316,119 @@ import {
   function renderInstallCard() {
     const installed = state.pwa.installed;
     const canInstall = state.pwa.canInstall && !installed;
+    const isIos = state.pwa.platform === "ios" && !installed;
+    const title = getInstallTitle();
+    const description = installed ? t("offlineReady") : getInstallDescription();
+    const iconName = installed ? "checkmark-circle-outline" : isIos ? "phone-portrait-outline" : "download-outline";
+    const buttonAction = isIos ? "show-ios-install-guide" : "install-app";
+    const buttonText = isIos ? t("installIosButton") : t("installButton");
 
     return `
       <section class="install-card">
         <div class="install-icon">
-          <ion-icon name="${installed ? "checkmark-circle-outline" : "download-outline"}"></ion-icon>
+          ${renderIcon(iconName)}
         </div>
         <div class="install-copy">
-          <h2>${escapeHtml(installed ? t("alreadyInstalled") : t("installApp"))}</h2>
-          <p>${escapeHtml(installed ? t("offlineReady") : t("installAppDescription"))}</p>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(description)}</p>
           <span>${escapeHtml(t("offlineReady"))}</span>
-          ${!installed && !canInstall ? `<small>${escapeHtml(t("directInstallUnavailable"))}</small>` : ""}
+          ${!installed && !canInstall && !isIos ? `<small>${escapeHtml(t("directInstallUnavailable"))}</small>` : ""}
         </div>
-        ${canInstall ? `
-          <ion-button class="install-button" size="small" type="button" data-action="install-app">
-            ${escapeHtml(t("installButton"))}
+        ${canInstall || isIos ? `
+          <ion-button class="install-button" size="small" type="button" data-action="${buttonAction}">
+            ${escapeHtml(buttonText)}
           </ion-button>
         ` : ""}
       </section>
     `;
   }
 
+  function getInstallTitle() {
+    if (state.pwa.installed) {
+      return t("alreadyInstalled");
+    }
+
+    if (state.pwa.platform === "ios") {
+      return t("installIosTitle");
+    }
+
+    return t("installApp");
+  }
+
+  function getInstallDescription() {
+    if (state.pwa.platform === "ios") {
+      return t("installIosDescription");
+    }
+
+    return t("installAppDescription");
+  }
+
+  function canShowInstallPopup() {
+    return !state.pwa.installed
+      && !state.settings.installPromptDismissed
+      && (state.pwa.canInstall || state.pwa.platform === "ios");
+  }
+
+  function openInstallPopup() {
+    if (state.installPopupOpen || !canShowInstallPopup()) {
+      return;
+    }
+
+    state.installPopupOpen = true;
+    const popup = document.createElement("aside");
+    popup.className = "install-popup";
+    popup.setAttribute("role", "dialog");
+    popup.setAttribute("aria-label", getInstallTitle());
+    popup.innerHTML = `
+      <button class="install-popup-close" type="button" aria-label="${escapeHtml(t("close"))}" data-popup-action="close">
+        ${renderIcon("close-outline")}
+      </button>
+      <img class="install-popup-logo" src="assets/icons/icon-192.png" alt="Budget Manager" />
+      <button class="install-popup-button" type="button" data-popup-action="install">
+        ${escapeHtml(t("installButton"))}
+      </button>
+    `;
+
+    popup.addEventListener("click", async (event) => {
+      const popupAction = event.target.closest("[data-popup-action]")?.dataset.popupAction;
+
+      if (popupAction === "close") {
+        await dismissInstallPopup();
+      }
+
+      if (popupAction === "install") {
+        await handleInstallApp({ keepPopupDismissed: true });
+        await dismissInstallPopup();
+      }
+    });
+
+    document.body.appendChild(popup);
+    hydrateIcons();
+  }
+
+  async function dismissInstallPopup() {
+    const popup = document.querySelector(".install-popup");
+
+    if (popup) {
+      popup.classList.add("closing");
+      window.setTimeout(() => popup.remove(), 180);
+    }
+
+    state.installPopupOpen = false;
+    state.settings.installPromptDismissed = true;
+    await saveSettings(state.settings);
+  }
+
+  function removeInstallPopup() {
+    document.querySelector(".install-popup")?.remove();
+    state.installPopupOpen = false;
+  }
+
   function renderProjectList(projects) {
     if (projects.length === 0) {
       return `
         <div class="empty-state">
-          <ion-icon name="folder-open-outline"></ion-icon>
+          ${renderIcon("folder-open-outline")}
           <h2>${escapeHtml(t("noProject"))}</h2>
           <p>${escapeHtml(t("noProjectDescription"))}</p>
         </div>
@@ -279,7 +449,7 @@ import {
               <article class="project-card ${hasBudget ? "" : "no-budget"}" data-action="open-project" data-id="${project.id}">
                 ${hasBudget
                   ? `<div class="project-ring" style="--ring-progress:${progress * 3.6}deg; --ring-color:${remaining < 0 ? "var(--color-danger)" : "var(--color-success)"}"></div>`
-                  : `<div class="project-icon"><ion-icon name="folder-outline"></ion-icon></div>`}
+                  : `<div class="project-icon">${renderIcon("folder-outline")}</div>`}
                 <div class="project-copy">
                   <h2>${escapeHtml(project.name)}</h2>
                   <p>${isOverBudget
@@ -291,7 +461,7 @@ import {
                   </div>
                 </div>
                 <button class="card-menu" type="button" aria-label="Projet menu" data-action="project-card-menu" data-id="${project.id}">
-                  <ion-icon name="ellipsis-horizontal-outline"></ion-icon>
+                  ${renderIcon("ellipsis-horizontal-outline")}
                 </button>
               </article>
             `;
@@ -306,7 +476,7 @@ import {
       <section class="page">
         <header class="subtopbar">
           <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
-            <ion-icon name="arrow-back-outline"></ion-icon>
+            ${renderIcon("arrow-back-outline")}
           </button>
           <h1 class="title-center">${escapeHtml(t("addProject"))}</h1>
           <span></span>
@@ -351,11 +521,11 @@ import {
       <section class="page">
         <header class="subtopbar">
           <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
-            <ion-icon name="arrow-back-outline"></ion-icon>
+            ${renderIcon("arrow-back-outline")}
           </button>
           <h1 class="title-center detail-title">${escapeHtml(project.name)}</h1>
           <button class="circle-button" type="button" aria-label="Menu projet" data-action="project-details-menu" data-id="${project.id}">
-            <ion-icon name="ellipsis-vertical-outline"></ion-icon>
+            ${renderIcon("ellipsis-vertical-outline")}
           </button>
         </header>
 
@@ -379,16 +549,16 @@ import {
 
         ${renderLinkedSelectionInfo(selectedLinkedExpenses)}
 
-        ${state.expenseSearch ? `<button class="search-chip" type="button" data-action="clear-expense-search">${escapeHtml(state.expenseSearch)} <ion-icon name="close-outline"></ion-icon></button>` : ""}
+        ${state.expenseSearch ? `<button class="search-chip" type="button" data-action="clear-expense-search">${escapeHtml(state.expenseSearch)} ${renderIcon("close-outline")}</button>` : ""}
 
         ${renderExpenseList(project, filteredExpenses)}
 
         <div class="detail-fab-stack">
           <button class="fab-button fab-button-secondary" type="button" aria-label="${escapeHtml(t("aiAssistant"))}" data-action="open-ai">
-            <ion-icon name="sparkles-outline"></ion-icon>
+            ${renderIcon("sparkles-outline")}
           </button>
           <button class="fab-button" type="button" aria-label="${escapeHtml(t("addExpense"))}" data-action="open-expense-modal">
-            <ion-icon name="add-outline"></ion-icon>
+            ${renderIcon("add-outline")}
           </button>
         </div>
 
@@ -402,7 +572,7 @@ import {
     if (project.expenses.length === 0) {
       return `
         <div class="empty-state">
-          <ion-icon name="receipt-outline"></ion-icon>
+          ${renderIcon("receipt-outline")}
           <h2>${escapeHtml(t("noExpense"))}</h2>
           <p>${escapeHtml(t("noExpenseDescription"))}</p>
         </div>
@@ -412,7 +582,7 @@ import {
     if (expenses.length === 0) {
       return `
         <div class="empty-state">
-          <ion-icon name="search-outline"></ion-icon>
+          ${renderIcon("search-outline")}
           <h2>${escapeHtml(t("noResult"))}</h2>
           <p>${escapeHtml(t("noResultDescription"))}</p>
         </div>
@@ -436,7 +606,7 @@ import {
                     return `
                       <article class="expense-item">
                         <button class="expense-select-button ${state.selectedLinkedExpenseIds.includes(expense.id) ? "active" : ""}" type="button" data-action="toggle-linked-expense" data-id="${expense.id}" aria-label="${escapeHtml(t("linkedExpenses"))}" aria-pressed="${state.selectedLinkedExpenseIds.includes(expense.id)}">
-                          <ion-icon name="${state.selectedLinkedExpenseIds.includes(expense.id) ? "checkmark-outline" : "add-outline"}"></ion-icon>
+                          ${renderIcon(state.selectedLinkedExpenseIds.includes(expense.id) ? "checkmark-outline" : "add-outline")}
                         </button>
                         <div>
                           <h3>${escapeHtml(expense.name)}</h3>
@@ -448,12 +618,12 @@ import {
                           <strong>${formatMoney(expense.amount, state.settings.currency)}</strong>
                           ${expense.linkedExpenseIds.length ? `
                             <button class="linked-badge" type="button" data-action="show-linked-expenses" data-id="${expense.id}">
-                              <ion-icon name="link-outline"></ion-icon>
+                              ${renderIcon("link-outline")}
                               ${escapeHtml(t("linkedExpenses"))}
                             </button>
                           ` : ""}
                           <button class="mini-icon-button danger" type="button" data-action="delete-expense" data-project-id="${project.id}" data-id="${expense.id}">
-                            <ion-icon name="trash-outline"></ion-icon>
+                            ${renderIcon("trash-outline")}
                           </button>
                         </div>
                       </article>
@@ -506,7 +676,7 @@ import {
           <p>${escapeHtml(t("willBeLinked"))}</p>
         </div>
         <button class="mini-icon-button" type="button" data-action="clear-linked-selection" aria-label="${escapeHtml(t("clearSelection"))}">
-          <ion-icon name="close-outline"></ion-icon>
+          ${renderIcon("close-outline")}
         </button>
       </section>
     `;
@@ -522,7 +692,7 @@ import {
           <div class="modal-header">
             <h2>${escapeHtml(t("addExpense"))}</h2>
             <button class="ghost-button" type="button" aria-label="${escapeHtml(t("close"))}" data-action="close-expense-modal">
-              <ion-icon name="close-outline"></ion-icon>
+              ${renderIcon("close-outline")}
             </button>
           </div>
           <form id="expense-form" class="line-form">
@@ -578,7 +748,7 @@ import {
               <p class="muted">${project ? `Analyse budgétaire et suivi du projet ${escapeHtml(project.name)}.` : "Analyse budgétaire et suivi du projet."}</p>
             </div>
             <button class="ghost-button ai-close-button" type="button" aria-label="${escapeHtml(t("close"))}" data-action="close-ai-modal">
-              <ion-icon name="close-outline"></ion-icon>
+              ${renderIcon("close-outline")}
             </button>
           </div>
           <div class="ai-chat-body">
@@ -643,11 +813,11 @@ import {
       <section class="page">
         <header class="subtopbar">
           <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-details" data-id="${project.id}">
-            <ion-icon name="arrow-back-outline"></ion-icon>
+            ${renderIcon("arrow-back-outline")}
           </button>
           <h1 class="title-center">${escapeHtml(t("projectPhases"))}</h1>
           <button class="circle-button" type="button" aria-label="${escapeHtml(t("addPhase"))}" data-action="add-phase" data-id="${project.id}">
-            <ion-icon name="add-outline"></ion-icon>
+            ${renderIcon("add-outline")}
           </button>
         </header>
 
@@ -662,10 +832,10 @@ import {
                   </div>
                   <div class="phase-actions">
                     <button class="mini-icon-button" type="button" data-action="edit-phase" data-id="${project.id}" data-phase="${escapeHtml(phase)}">
-                      <ion-icon name="create-outline"></ion-icon>
+                      ${renderIcon("create-outline")}
                     </button>
                     <button class="mini-icon-button danger" type="button" data-action="delete-phase" data-id="${project.id}" data-phase="${escapeHtml(phase)}">
-                      <ion-icon name="trash-outline"></ion-icon>
+                      ${renderIcon("trash-outline")}
                     </button>
                   </div>
                 </article>
@@ -682,7 +852,7 @@ import {
       <section class="page">
         <header class="subtopbar">
           <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
-            <ion-icon name="arrow-back-outline"></ion-icon>
+            ${renderIcon("arrow-back-outline")}
           </button>
           <h1 class="title-center">${escapeHtml(t("settings"))}</h1>
           <span></span>
@@ -696,7 +866,7 @@ import {
             </div>
             <span class="settings-choice-value">
               ${escapeHtml(state.settings.currency)}
-              <ion-icon name="chevron-forward-outline"></ion-icon>
+              ${renderIcon("chevron-forward-outline")}
             </span>
           </button>
 
@@ -715,7 +885,18 @@ import {
             </div>
             <span class="settings-choice-value">
               ${escapeHtml(getLanguageLabel(state.settings.language))}
-              <ion-icon name="chevron-forward-outline"></ion-icon>
+              ${renderIcon("chevron-forward-outline")}
+            </span>
+          </button>
+
+          <button class="settings-choice panel" type="button" data-action="settings-install-app">
+            <div>
+              <h2>${escapeHtml(state.pwa.installed ? t("alreadyInstalled") : t("installApp"))}</h2>
+              <p class="muted">${escapeHtml(state.pwa.installed ? t("offlineReady") : getInstallDescription())}</p>
+            </div>
+            <span class="settings-choice-value">
+              ${renderIcon(state.pwa.installed ? "checkmark-circle-outline" : "download-outline")}
+              ${renderIcon("chevron-forward-outline")}
             </span>
           </button>
         </section>
@@ -1157,6 +1338,7 @@ import {
       canInstall: Boolean(detail.canInstall),
       installed: Boolean(detail.installed),
       online: typeof detail.online === "boolean" ? detail.online : state.pwa.online,
+      platform: detail.platform || state.pwa.platform,
       manualInstall: Boolean(detail.manualInstall),
     };
 
@@ -1179,12 +1361,19 @@ import {
     if (getRoute().view === "home") {
       renderHomeView();
     }
+
+    if (state.pwa.installed) {
+      removeInstallPopup();
+      return;
+    }
+
+    window.setTimeout(openInstallPopup, 300);
   }
 
-  async function handleInstallApp() {
+  async function handleInstallApp(options = {}) {
     if (!window.BudgetPwa) {
       showToast(t("directInstallUnavailable"), "warning");
-      renderHomeView();
+      render();
       return;
     }
 
@@ -1193,19 +1382,45 @@ import {
     if (result.status === "accepted") {
       state.pwa.installed = true;
       state.pwa.manualInstall = false;
+      state.settings.installPromptDismissed = true;
+      await saveSettings(state.settings);
       showToast(t("installedSuccess"), "success");
     }
 
     if (result.status === "installed") {
       state.pwa.installed = true;
       state.pwa.manualInstall = false;
+      state.settings.installPromptDismissed = true;
+      await saveSettings(state.settings);
     }
 
     if (result.status === "manual") {
-      showToast(t("directInstallUnavailable"), "warning");
+      if (state.pwa.platform === "ios") {
+        await showIosInstallGuide();
+      } else {
+        showToast(t("directInstallUnavailable"), "warning");
+      }
     }
 
-    renderHomeView();
+    if (options.keepPopupDismissed) {
+      state.settings.installPromptDismissed = true;
+      await saveSettings(state.settings);
+    }
+
+    render();
+  }
+
+  async function showIosInstallGuide() {
+    const message = `
+      <div class="ios-install-guide">
+        <p>${escapeHtml(t("installIosStepSafari"))}</p>
+        <p>${escapeHtml(t("installIosStepShare"))}</p>
+        <p>${escapeHtml(t("installIosStepAdd"))}</p>
+        <p>${escapeHtml(t("installIosStepOpen"))}</p>
+      </div>
+    `;
+
+    await showInfoAlert(t("installIosTitle"), message);
   }
 
   app.addEventListener("click", async (event) => {
@@ -1238,6 +1453,16 @@ import {
     }
 
     if (action === "install-app") {
+      handleInstallApp();
+    }
+
+    if (action === "show-ios-install-guide") {
+      showIosInstallGuide();
+    }
+
+    if (action === "settings-install-app") {
+      state.settings.installPromptDismissed = false;
+      await saveSettings(state.settings);
       handleInstallApp();
     }
 

@@ -1,5 +1,5 @@
-const CACHE_NAME = "budget-manager-v2";
-const RUNTIME_CACHE = "budget-manager-runtime-v2";
+const CACHE_NAME = "budget-manager-v8";
+const RUNTIME_CACHE = "budget-manager-runtime-v8";
 
 const APP_SHELL = [
   "./",
@@ -21,6 +21,8 @@ const APP_SHELL = [
   "./langs/fr.json",
   "./langs/en.json",
   "./langs/ar.json",
+  "./assets/icons/apple-touch-icon.png",
+  "./assets/icons/favicon.png",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png"
 ];

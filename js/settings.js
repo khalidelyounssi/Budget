@@ -2,6 +2,7 @@ export const DEFAULT_SETTINGS = {
   currency: "DH",
   darkMode: false,
   language: "fr",
+  installPromptDismissed: false,
 };
 
 export function normalizeSettings(settings) {
@@ -17,6 +18,7 @@ export function normalizeSettings(settings) {
     darkMode: Boolean(settings && settings.darkMode),
     currency: settings && settings.currency ? settings.currency : DEFAULT_SETTINGS.currency,
     language,
+    installPromptDismissed: Boolean(settings && settings.installPromptDismissed),
   };
 }
 

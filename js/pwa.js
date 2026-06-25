@@ -1,5 +1,12 @@
 let deferredInstallPrompt = null;
 
+function isIosDevice() {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  const isTouchMac = window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1;
+
+  return /iphone|ipad|ipod/.test(userAgent) || isTouchMac;
+}
+
 function isAppInstalled() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
@@ -10,6 +17,7 @@ function notifyPwaChange(detail = {}) {
       canInstall: Boolean(deferredInstallPrompt),
       installed: isAppInstalled(),
       online: navigator.onLine,
+      platform: isIosDevice() ? "ios" : "standard",
       ...detail
     }
   }));
@@ -22,7 +30,7 @@ async function installApp() {
   }
 
   if (!deferredInstallPrompt) {
-    notifyPwaChange({ manualInstall: true });
+    notifyPwaChange({ manualInstall: true, platform: isIosDevice() ? "ios" : "standard" });
     return { status: "manual" };
   }
 
@@ -39,11 +47,13 @@ async function installApp() {
 window.BudgetPwa = {
   installApp,
   isAppInstalled,
+  isIosDevice,
   getState() {
     return {
       canInstall: Boolean(deferredInstallPrompt),
       installed: isAppInstalled(),
-      online: navigator.onLine
+      online: navigator.onLine,
+      platform: isIosDevice() ? "ios" : "standard"
     };
   }
 };
