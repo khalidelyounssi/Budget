@@ -1411,14 +1411,12 @@ import {
   }
 
   async function showIosInstallGuide() {
-    const message = `
-      <div class="ios-install-guide">
-        <p>${escapeHtml(t("installIosStepSafari"))}</p>
-        <p>${escapeHtml(t("installIosStepShare"))}</p>
-        <p>${escapeHtml(t("installIosStepAdd"))}</p>
-        <p>${escapeHtml(t("installIosStepOpen"))}</p>
-      </div>
-    `;
+    const message = [
+      t("installIosStepSafari"),
+      t("installIosStepShare"),
+      t("installIosStepAdd"),
+      t("installIosStepOpen"),
+    ].join("\n\n");
 
     await showInfoAlert(t("installIosTitle"), message);
   }

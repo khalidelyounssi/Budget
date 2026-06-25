@@ -68,6 +68,11 @@ body.dark ion-alert {
   color: var(--color-text);
 }
 
+.app-overlay::part(message) {
+  white-space: pre-line;
+  line-height: 1.45;
+}
+
 button,
 ion-button,
 input,
@@ -97,6 +102,8 @@ button {
 }
 
 .ui-icon.icon-fallback {
+  display: grid;
+  place-items: center;
   font-weight: 800;
 }
 
@@ -272,23 +279,6 @@ button {
   --background-activated: var(--color-primary);
   font-weight: 800;
   text-transform: none;
-}
-
-.ios-install-guide {
-  display: grid;
-  gap: 10px;
-  text-align: start;
-}
-
-.ios-install-guide p {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-success-soft);
-  color: var(--color-text);
-  font-weight: 700;
-  line-height: 1.35;
 }
 
 .install-popup {
