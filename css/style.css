@@ -216,6 +216,14 @@ button {
   font-weight: 800;
 }
 
+.install-copy small {
+  display: block;
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .install-button {
   --border-radius: 12px;
   --background: var(--color-primary);
@@ -223,24 +231,6 @@ button {
   --background-activated: var(--color-primary);
   font-weight: 800;
   text-transform: none;
-}
-
-.manual-install {
-  grid-column: 1 / -1;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(120, 137, 154, 0.1);
-}
-
-.manual-install strong {
-  color: var(--color-text);
-}
-
-.manual-install p {
-  margin: 8px 0 0;
-  color: var(--color-muted);
-  font-size: 13px;
-  line-height: 1.4;
 }
 
 .summary-grid {

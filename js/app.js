@@ -232,7 +232,7 @@ import {
 
   function renderInstallCard() {
     const installed = state.pwa.installed;
-    const showManual = state.pwa.manualInstall && !installed;
+    const canInstall = state.pwa.canInstall && !installed;
 
     return `
       <section class="install-card">
@@ -243,18 +243,12 @@ import {
           <h2>${escapeHtml(installed ? t("alreadyInstalled") : t("installApp"))}</h2>
           <p>${escapeHtml(installed ? t("offlineReady") : t("installAppDescription"))}</p>
           <span>${escapeHtml(t("offlineReady"))}</span>
+          ${!installed && !canInstall ? `<small>${escapeHtml(t("directInstallUnavailable"))}</small>` : ""}
         </div>
-        ${installed ? "" : `
+        ${canInstall ? `
           <ion-button class="install-button" size="small" type="button" data-action="install-app">
             ${escapeHtml(t("installButton"))}
           </ion-button>
-        `}
-        ${showManual ? `
-          <div class="manual-install">
-            <strong>${escapeHtml(t("manualInstallTitle"))}</strong>
-            <p>${escapeHtml(t("manualInstallAndroid"))}</p>
-            <p>${escapeHtml(t("manualInstallIos"))}</p>
-          </div>
         ` : ""}
       </section>
     `;
@@ -1189,7 +1183,7 @@ import {
 
   async function handleInstallApp() {
     if (!window.BudgetPwa) {
-      state.pwa.manualInstall = true;
+      showToast(t("directInstallUnavailable"), "warning");
       renderHomeView();
       return;
     }
@@ -1208,7 +1202,7 @@ import {
     }
 
     if (result.status === "manual") {
-      state.pwa.manualInstall = true;
+      showToast(t("directInstallUnavailable"), "warning");
     }
 
     renderHomeView();
