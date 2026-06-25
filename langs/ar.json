@@ -65,5 +65,16 @@
   "selectedLinkedExpenses": "مصروف/مصاريف محددة",
   "willBeLinked": "سيتم ربطها بالمصروف القادم الذي ستضيفه.",
   "clearSelection": "مسح الاختيار",
+  "installApp": "تثبيت التطبيق",
+  "installAppDescription": "ثبت Budget Manager على هاتفك واستعمله بدون إنترنت.",
+  "installButton": "تثبيت",
+  "offlineReady": "يعمل بدون إنترنت بعد أول فتح.",
+  "alreadyInstalled": "التطبيق مثبت بالفعل",
+  "manualInstallTitle": "التثبيت اليدوي",
+  "manualInstallAndroid": "على Android Chrome: افتح قائمة ⋮ ثم اختر إضافة إلى الشاشة الرئيسية.",
+  "manualInstallIos": "على iPhone Safari: اضغط مشاركة ثم إضافة إلى الشاشة الرئيسية.",
+  "offlineMode": "تم تفعيل وضع عدم الاتصال",
+  "onlineMode": "تمت استعادة الاتصال",
+  "installedSuccess": "تم تثبيت التطبيق بنجاح.",
   "general": "عام"
 }

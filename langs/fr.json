@@ -65,5 +65,16 @@
   "selectedLinkedExpenses": "dépense(s) sélectionnée(s)",
   "willBeLinked": "Elles seront liées à la prochaine dépense ajoutée.",
   "clearSelection": "Effacer la sélection",
+  "installApp": "Installer l’application",
+  "installAppDescription": "Installez Budget Manager sur votre téléphone et utilisez-le hors ligne.",
+  "installButton": "Installer",
+  "offlineReady": "Fonctionne hors ligne après la première ouverture.",
+  "alreadyInstalled": "Application déjà installée",
+  "manualInstallTitle": "Installation manuelle",
+  "manualInstallAndroid": "Sur Android Chrome : ouvrez le menu ⋮ puis choisissez Ajouter à l’écran d’accueil.",
+  "manualInstallIos": "Sur iPhone Safari : appuyez sur Partager puis Ajouter à l’écran d’accueil.",
+  "offlineMode": "Mode hors ligne activé",
+  "onlineMode": "Connexion rétablie",
+  "installedSuccess": "Application installée avec succès.",
   "general": "Général"
 }

@@ -8,6 +8,7 @@ import {
   saveSettings,
   updateProject,
 } from "./db.js";
+import "./pwa.js";
 import { addExpense, deleteExpense, filterExpenses, getLinkedExpenses } from "./expenses.js";
 import { buildProjectExport } from "./export.js";
 import { addPhase, deletePhase, ensureProjectPhases, renamePhase } from "./phases.js";
@@ -42,6 +43,12 @@ import {
     expenseSearch: "",
     expenseModalOpen: false,
     selectedLinkedExpenseIds: [],
+    pwa: {
+      canInstall: false,
+      installed: false,
+      manualInstall: false,
+      online: navigator.onLine,
+    },
     aiModalOpen: false,
     aiProjectId: "",
     aiQuestion: "",
@@ -135,6 +142,9 @@ import {
       applyTheme(state.settings);
       await refreshProjects();
       state.appReady = true;
+      if (window.BudgetPwa) {
+        state.pwa = { ...state.pwa, ...window.BudgetPwa.getState() };
+      }
       render();
     } catch (error) {
       console.error("App initialization failed.", error);
@@ -209,11 +219,43 @@ import {
           <button class="${state.projectFilter === "completed" ? "active" : ""}" type="button" data-action="set-filter" data-filter="completed">${escapeHtml(t("completed"))}</button>
         </div>
 
+        ${renderInstallCard()}
+
         ${renderProjectList(filteredProjects)}
 
         <button class="fab-button" type="button" aria-label="${escapeHtml(t("addProject"))}" data-action="go-add-project">
           <ion-icon name="add-outline"></ion-icon>
         </button>
+      </section>
+    `;
+  }
+
+  function renderInstallCard() {
+    const installed = state.pwa.installed;
+    const showManual = state.pwa.manualInstall && !installed;
+
+    return `
+      <section class="install-card">
+        <div class="install-icon">
+          <ion-icon name="${installed ? "checkmark-circle-outline" : "download-outline"}"></ion-icon>
+        </div>
+        <div class="install-copy">
+          <h2>${escapeHtml(installed ? t("alreadyInstalled") : t("installApp"))}</h2>
+          <p>${escapeHtml(installed ? t("offlineReady") : t("installAppDescription"))}</p>
+          <span>${escapeHtml(t("offlineReady"))}</span>
+        </div>
+        ${installed ? "" : `
+          <ion-button class="install-button" size="small" type="button" data-action="install-app">
+            ${escapeHtml(t("installButton"))}
+          </ion-button>
+        `}
+        ${showManual ? `
+          <div class="manual-install">
+            <strong>${escapeHtml(t("manualInstallTitle"))}</strong>
+            <p>${escapeHtml(t("manualInstallAndroid"))}</p>
+            <p>${escapeHtml(t("manualInstallIos"))}</p>
+          </div>
+        ` : ""}
       </section>
     `;
   }
@@ -1115,6 +1157,63 @@ import {
     renderSettingsView();
   }
 
+  function updatePwaState(detail = {}) {
+    state.pwa = {
+      ...state.pwa,
+      canInstall: Boolean(detail.canInstall),
+      installed: Boolean(detail.installed),
+      online: typeof detail.online === "boolean" ? detail.online : state.pwa.online,
+      manualInstall: Boolean(detail.manualInstall),
+    };
+
+    if (!state.appReady) {
+      return;
+    }
+
+    if (detail.installedNow) {
+      showToast(t("installedSuccess"), "success");
+    }
+
+    if (detail.offlineNow) {
+      showToast(t("offlineMode"), "medium");
+    }
+
+    if (detail.onlineNow) {
+      showToast(t("onlineMode"), "success");
+    }
+
+    if (getRoute().view === "home") {
+      renderHomeView();
+    }
+  }
+
+  async function handleInstallApp() {
+    if (!window.BudgetPwa) {
+      state.pwa.manualInstall = true;
+      renderHomeView();
+      return;
+    }
+
+    const result = await window.BudgetPwa.installApp();
+
+    if (result.status === "accepted") {
+      state.pwa.installed = true;
+      state.pwa.manualInstall = false;
+      showToast(t("installedSuccess"), "success");
+    }
+
+    if (result.status === "installed") {
+      state.pwa.installed = true;
+      state.pwa.manualInstall = false;
+    }
+
+    if (result.status === "manual") {
+      state.pwa.manualInstall = true;
+    }
+
+    renderHomeView();
+  }
+
   app.addEventListener("click", async (event) => {
     const actionElement = event.target.closest("[data-action]");
     const modalPanel = event.target.closest("[data-modal-panel]");
@@ -1142,6 +1241,10 @@ import {
 
     if (action === "go-settings") {
       navigate("settings");
+    }
+
+    if (action === "install-app") {
+      handleInstallApp();
     }
 
     if (action === "go-add-project") {
@@ -1270,6 +1373,10 @@ import {
     if (event.target.id === "ai-form") {
       handleAiSubmit(event);
     }
+  });
+
+  window.addEventListener("budget:pwa-change", (event) => {
+    updatePwaState(event.detail || {});
   });
 
   window.addEventListener("hashchange", render);
