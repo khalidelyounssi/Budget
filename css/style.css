@@ -186,6 +186,27 @@ button {
   font-size: 22px;
 }
 
+.back-arrow {
+  display: block;
+  color: currentColor;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 0.8;
+}
+
+.back-button::before {
+  display: none;
+  color: currentColor;
+  content: "←";
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 0.8;
+}
+
+.back-button .back-arrow {
+  color: var(--color-text);
+}
+
 .segmented-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;

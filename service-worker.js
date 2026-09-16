@@ -1,5 +1,5 @@
-const CACHE_NAME = "budget-manager-v9";
-const RUNTIME_CACHE = "budget-manager-runtime-v9";
+const CACHE_NAME = "budget-manager-v14";
+const RUNTIME_CACHE = "budget-manager-runtime-v14";
 
 const APP_SHELL = [
   "./",

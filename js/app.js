@@ -86,7 +86,12 @@ import {
       "trash-outline": "⌫",
     };
 
-    return `<span class="ui-icon" data-icon="${escapeHtml(name)}" data-fallback="${escapeHtml(fallbackIcons[name] || "•")}" aria-hidden="true"></span>`;
+    const fallback = fallbackIcons[name] || "•";
+    return `<span class="ui-icon" data-icon="${escapeHtml(name)}" data-fallback="${escapeHtml(fallback)}" aria-hidden="true">${escapeHtml(fallback)}</span>`;
+  }
+
+  function renderBackIcon() {
+    return '<span class="back-arrow" aria-hidden="true">←</span>';
   }
 
   const iconCache = new Map();
@@ -130,17 +135,18 @@ import {
   }
 
   async function hydrateIcons() {
-    const icons = [...document.querySelectorAll(".ui-icon[data-icon]:empty")];
+    const icons = [...document.querySelectorAll(".ui-icon[data-icon]:not([data-hydrated])")];
 
     await Promise.all(icons.map(async (icon) => {
       const svg = await getIconSvg(icon.dataset.icon);
       if (!svg) {
         icon.classList.add("icon-fallback");
-        icon.textContent = icon.dataset.fallback || "";
+        icon.dataset.hydrated = "true";
         return;
       }
 
       icon.innerHTML = svg;
+      icon.dataset.hydrated = "true";
     }));
   }
 
@@ -475,8 +481,8 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
-            ${renderIcon("arrow-back-outline")}
+          <button class="ghost-button back-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
+            ${renderBackIcon()}
           </button>
           <h1 class="title-center">${escapeHtml(t("addProject"))}</h1>
           <span></span>
@@ -520,8 +526,8 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
-            ${renderIcon("arrow-back-outline")}
+          <button class="ghost-button back-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
+            ${renderBackIcon()}
           </button>
           <h1 class="title-center detail-title">${escapeHtml(project.name)}</h1>
           <button class="circle-button" type="button" aria-label="Menu projet" data-action="project-details-menu" data-id="${project.id}">
@@ -554,9 +560,6 @@ import {
         ${renderExpenseList(project, filteredExpenses)}
 
         <div class="detail-fab-stack">
-          <button class="fab-button fab-button-secondary" type="button" aria-label="${escapeHtml(t("aiAssistant"))}" data-action="open-ai">
-            ${renderIcon("sparkles-outline")}
-          </button>
           <button class="fab-button" type="button" aria-label="${escapeHtml(t("addExpense"))}" data-action="open-expense-modal">
             ${renderIcon("add-outline")}
           </button>
@@ -812,8 +815,8 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-details" data-id="${project.id}">
-            ${renderIcon("arrow-back-outline")}
+          <button class="ghost-button back-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-details" data-id="${project.id}">
+            ${renderBackIcon()}
           </button>
           <h1 class="title-center">${escapeHtml(t("projectPhases"))}</h1>
           <button class="circle-button" type="button" aria-label="${escapeHtml(t("addPhase"))}" data-action="add-phase" data-id="${project.id}">
@@ -851,8 +854,8 @@ import {
     app.innerHTML = `
       <section class="page">
         <header class="subtopbar">
-          <button class="ghost-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
-            ${renderIcon("arrow-back-outline")}
+          <button class="ghost-button back-button" type="button" aria-label="${escapeHtml(t("back"))}" data-action="go-home">
+            ${renderBackIcon()}
           </button>
           <h1 class="title-center">${escapeHtml(t("settings"))}</h1>
           <span></span>
@@ -1084,7 +1087,6 @@ import {
         },
       },
       { text: t("exportJson"), icon: "download-outline", handler: () => exportCurrentProject(project.id) },
-      { text: t("aiAssistant"), icon: "sparkles-outline", handler: () => openAiModal(project.id) },
       {
         text: project.status === "completed" ? t("inProgress") : t("completed"),
         icon: "checkmark-circle-outline",
